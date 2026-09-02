@@ -1,0 +1,63 @@
+/**
+ * Grades a submitted set of answers against a QuizSession. Pure logic, no
+ * AI calls needed - the correct answers were already decided at
+ * generation time, so grading just compares indices and assembles
+ * feedback with citations.
+ */
+class {
+
+    /**
+     * @session A QuizSession (the one the answers were submitted for).
+     * @answers Struct/array mapping questionId -> chosen choice index,
+     *          e.g. { "uuid-1": 2, "uuid-2": 0 }.
+     *
+     * @return struct {
+     *     score: numeric,          // number correct
+     *     total: numeric,
+     *     percent: numeric,
+     *     results: array of {
+     *         questionId: string,
+     *         question: string,
+     *         correct: boolean,
+     *         chosenIndex: numeric,
+     *         correctIndex: numeric,
+     *         explanation: string,
+     *         source: string       // "fileName, p.N"
+     *     }
+     * }
+     */
+    public struct function grade( required any session, required struct answers ) {
+        var results = [];
+        var score   = 0;
+
+        for ( var q in session.getQuestions() ) {
+            var full        = q.toFullStruct();
+            var chosenIndex = arguments.answers.keyExists( full.id ) ? arguments.answers[ full.id ] : -1;
+            var isCorrect   = ( chosenIndex == full.correctIndex );
+
+            if ( isCorrect ) {
+                score++;
+            }
+
+            results.append( {
+                questionId  : full.id,
+                question    : full.question,
+                correct     : isCorrect,
+                chosenIndex : chosenIndex,
+                correctIndex: full.correctIndex,
+                explanation : full.explanation,
+                source      : "#full.sourceDocument#, p.#full.sourcePage#"
+            } );
+        }
+
+        var total = session.getQuestions().len();
+
+        return {
+            score  : score,
+            total  : total,
+            percent: total == 0 ? 0 : round( ( score / total ) * 100 ),
+            results: results
+        };
+    }
+
+}

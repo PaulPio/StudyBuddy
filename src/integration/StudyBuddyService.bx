@@ -1,0 +1,138 @@
+import src.quiz.QuizGenerator;
+import src.quiz.QuizGrader;
+import src.integration.mocks.MockDocumentStore;
+import src.integration.mocks.MockStudyBuddyAgent;
+
+/**
+ * The single entry point the frontend (or the HTTP API in
+ * src/integration/webroot/) talks to. Wires together the document store
+ * (Person 2), the agent (Person 1), and the quiz module (Person 4) behind
+ * three methods: ask(), startQuiz(), submitQuiz().
+ *
+ * Whether it's talking to the real agent/store or the mocks is decided
+ * once, here, based on config - nothing else in the app needs to know or
+ * care which one is live. That's what lets all four of us build in
+ * parallel: this class is the seam.
+ *
+ * In-memory session storage is fine for a 24h hackathon demo; if quizzes
+ * need to survive a server restart, swap variables.quizSessions for a
+ * real cache.
+ */
+class {
+
+    property name="documentStore";
+    property name="agent";
+    property name="quizGenerator";
+    property name="quizGrader";
+
+    variables.quizSessions = {}; // sessionId -> QuizSession
+
+    /**
+     * @config Optional overrides, mainly for tests:
+     *         { useMockAgent: boolean, useMockStore: boolean,
+     *           documentStore: any, agent: any }
+     */
+    function init( struct config = {} ) {
+        var useMockStore = arguments.config.useMockStore ?: true;
+        var useMockAgent = arguments.config.useMockAgent ?: true;
+
+        variables.documentStore = arguments.config.documentStore ?: (
+            useMockStore ? new MockDocumentStore() : createRealDocumentStore()
+        );
+
+        variables.agent = arguments.config.agent ?: (
+            useMockAgent ? new MockStudyBuddyAgent( variables.documentStore ) : createRealAgent()
+        );
+
+        variables.quizGenerator = new QuizGenerator( variables.documentStore );
+        variables.quizGrader    = new QuizGrader();
+
+        return this;
+    }
+
+    /**
+     * Ask a question about the course material.
+     * @return struct { answer, sources, confidence } - see
+     *         docs/ARCHITECTURE.md / IStudyBuddyAgent for the exact shape.
+     */
+    public struct function ask(
+        required string question,
+        string courseId = "",
+        array history = []
+    ) {
+        return variables.agent.ask(
+            question: arguments.question,
+            courseId: arguments.courseId,
+            history : arguments.history
+        );
+    }
+
+    /**
+     * Start a new quiz on a topic.
+     * @return struct - QuizSession.toPublicStruct() (no answer key included)
+     */
+    public struct function startQuiz(
+        required string topic,
+        string courseId = "",
+        numeric count = 5
+    ) {
+        var session = variables.quizGenerator.generate(
+            topic   : arguments.topic,
+            courseId: arguments.courseId,
+            count   : arguments.count
+        );
+
+        variables.quizSessions[ session.getId() ] = session;
+
+        return session.toPublicStruct();
+    }
+
+    /**
+     * Grade a submitted quiz.
+     * @sessionId The id returned by startQuiz().
+     * @answers   Struct mapping questionId -> chosen index.
+     * @return struct - see QuizGrader.grade()
+     */
+    public struct function submitQuiz( required string sessionId, required struct answers ) {
+        if ( !variables.quizSessions.keyExists( arguments.sessionId ) ) {
+            throw(
+                type    = "QuizNotFoundException",
+                message = "No quiz session found for id '#arguments.sessionId#'. It may have expired (server restarted) - start a new quiz."
+            );
+        }
+
+        var session = variables.quizSessions[ arguments.sessionId ];
+        return variables.quizGrader.grade( session, arguments.answers );
+    }
+
+    /**
+     * Ingest the demo course material. Called once at startup / by the
+     * demo script so ask()/startQuiz() have something to search.
+     */
+    public struct function ingestSampleData( string path = "sample-data" ) {
+        return variables.documentStore.ingestFolder( arguments.path );
+    }
+
+    // ---- private factories, only reached once real classes exist -------
+
+    private any function createRealDocumentStore() {
+        // Person 2: once src/rag/DocumentStore.bx exists, this becomes:
+        //     import src.rag.DocumentStore;
+        //     return new DocumentStore();
+        throw(
+            type    = "NotImplementedException",
+            message = "src/rag/DocumentStore.bx doesn't exist yet - keep useMockStore: true until it does."
+        );
+    }
+
+    private any function createRealAgent() {
+        // Person 1: once src/agent/StudyBuddyAgent.bx exists, this becomes:
+        //     import src.agent.StudyBuddyAgent;
+        //     return new StudyBuddyAgent( variables.documentStore );
+        throw(
+            type    = "NotImplementedException",
+            message = "src/agent/StudyBuddyAgent.bx doesn't exist yet - keep useMockAgent: true until it does."
+        );
+    }
+
+}

@@ -1,0 +1,14 @@
+{
+  "modules": {
+    "bxai": {
+      "settings": {
+        "provider": "${AI_PROVIDER:openai}",
+        "apiKey": "${OPENAI_API_KEY}",
+        "defaultParams": {
+          "model": "${AI_MODEL:gpt-4o-mini}",
+          "temperature": 0.2
+        }
+      }
+    }
+  }
+}

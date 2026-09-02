@@ -1,0 +1,89 @@
+import src.quiz.QuizGrader;
+import src.quiz.QuizQuestion;
+import src.quiz.QuizSession;
+
+/**
+ * Pure logic tests for grading - no AI calls, no mocks needed, so these
+ * run fast and never flake. Run with: box testbox run
+ */
+class extends="testbox.system.BaseSpec" {
+
+    function run() {
+        describe( "QuizGrader", () => {
+
+            beforeEach( () => {
+                var q1 = new QuizQuestion();
+                q1.setQuestion( "What must a primary key be?" );
+                q1.setChoices( [ "A. Nullable", "B. Unique", "C. A string", "D. Optional" ] );
+                q1.setCorrectIndex( 1 );
+                q1.setExplanation( "Primary keys must be unique and non-null." );
+                q1.setSourceDocument( "lecture01-intro-to-databases.md" );
+                q1.setSourcePage( 1 );
+
+                var q2 = new QuizQuestion();
+                q2.setQuestion( "3NF eliminates which kind of dependency?" );
+                q2.setChoices( [ "A. Transitive", "B. Circular", "C. Foreign", "D. Composite" ] );
+                q2.setCorrectIndex( 0 );
+                q2.setExplanation( "3NF removes transitive dependencies between non-key columns." );
+                q2.setSourceDocument( "lecture02-normalization.md" );
+                q2.setSourcePage( 2 );
+
+                variables.session = new QuizSession(
+                    topic    : "databases",
+                    questions: [ q1, q2 ]
+                );
+                variables.grader = new QuizGrader();
+            } );
+
+            it( "gives full marks when every answer is correct", () => {
+                var q1Id = variables.session.getQuestions()[ 1 ].getId();
+                var q2Id = variables.session.getQuestions()[ 2 ].getId();
+
+                var result = variables.grader.grade( variables.session, {
+                    "#q1Id#": 1,
+                    "#q2Id#": 0
+                } );
+
+                expect( result.score ).toBe( 2 );
+                expect( result.total ).toBe( 2 );
+                expect( result.percent ).toBe( 100 );
+            } );
+
+            it( "marks wrong answers as incorrect and still returns the correct index", () => {
+                var q1Id = variables.session.getQuestions()[ 1 ].getId();
+                var q2Id = variables.session.getQuestions()[ 2 ].getId();
+
+                var result = variables.grader.grade( variables.session, {
+                    "#q1Id#": 0, // wrong, correct is 1
+                    "#q2Id#": 0  // correct
+                } );
+
+                expect( result.score ).toBe( 1 );
+                expect( result.percent ).toBe( 50 );
+                expect( result.results[ 1 ].correct ).toBeFalse();
+                expect( result.results[ 1 ].correctIndex ).toBe( 1 );
+            } );
+
+            it( "treats an unanswered question as incorrect instead of erroring", () => {
+                var q2Id = variables.session.getQuestions()[ 2 ].getId();
+
+                var result = variables.grader.grade( variables.session, {
+                    "#q2Id#": 0
+                } );
+
+                expect( result.score ).toBe( 1 );
+                expect( result.results[ 1 ].chosenIndex ).toBe( -1 );
+                expect( result.results[ 1 ].correct ).toBeFalse();
+            } );
+
+            it( "includes the source citation for every result", () => {
+                var q1Id = variables.session.getQuestions()[ 1 ].getId();
+                var result = variables.grader.grade( variables.session, { "#q1Id#": 1 } );
+
+                expect( result.results[ 1 ].source ).toBe( "lecture01-intro-to-databases.md, p.1" );
+            } );
+
+        } );
+    }
+
+}

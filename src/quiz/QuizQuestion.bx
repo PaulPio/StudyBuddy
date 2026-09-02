@@ -1,0 +1,52 @@
+/**
+ * A single multiple-choice quiz question. Used both as the plain data
+ * model passed around the app, and as the structured-output template for
+ * aiChat() - see QuizGenerator.bx.
+ *
+ * BoxLang AI's structured output (returnFormat) fills in a class's
+ * properties directly from the model's JSON response, so the property
+ * names/types here are also the schema the AI is asked to return.
+ */
+class {
+
+    property name="id"            type="string";
+    property name="question"      type="string";
+    property name="choices"       type="array";  // exactly 4 strings, e.g. ["A. ...", "B. ...", "C. ...", "D. ..."]
+    property name="correctIndex"  type="numeric"; // 0-based index into choices
+    property name="explanation"   type="string";  // why the correct answer is correct
+    property name="sourceDocument" type="string"; // e.g. "lecture02-normalization.md"
+    property name="sourcePage"    type="numeric";
+
+    function init() {
+        variables.id = createUUID();
+        variables.choices = [];
+        variables.correctIndex = 0;
+        return this;
+    }
+
+    /**
+     * Client-safe view: strips the correct answer + explanation so the
+     * quiz can be sent to the frontend before grading without leaking the
+     * answer key in the network tab.
+     */
+    public struct function toPublicStruct() {
+        return {
+            id      : variables.id,
+            question: variables.question,
+            choices : variables.choices
+        };
+    }
+
+    public struct function toFullStruct() {
+        return {
+            id            : variables.id,
+            question      : variables.question,
+            choices       : variables.choices,
+            correctIndex  : variables.correctIndex,
+            explanation   : variables.explanation,
+            sourceDocument: variables.sourceDocument,
+            sourcePage    : variables.sourcePage
+        };
+    }
+
+}

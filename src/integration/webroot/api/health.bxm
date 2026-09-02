@@ -1,0 +1,8 @@
+<bx:script>
+    bx:header name="Content-Type" value="application/json";
+    writeOutput( serializeJSON( {
+        status: "ok",
+        service: "studybuddy-api",
+        time: dateTimeFormat( now(), "yyyy-mm-dd'T'HH:nn:ss" )
+    } ) );
+</bx:script>

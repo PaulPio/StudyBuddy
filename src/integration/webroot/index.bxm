@@ -1,0 +1,36 @@
+<bx:script>
+    // Person 3: drop an index.html in src/frontend/ and this page will
+    // step out of the way automatically (see the file check below) -
+    // this is just a placeholder so `boxlang-miniserver` never 404s on
+    // the root while the real UI is being built.
+    var here          = getDirectoryFromPath( getCurrentTemplatePath() );
+    var frontendIndex = here & "../../frontend/index.html";
+    if ( fileExists( frontendIndex ) ) {
+        writeOutput( fileRead( frontendIndex ) );
+        return;
+    }
+</bx:script>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>StudyBuddy API</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 640px; margin: 3rem auto; line-height: 1.5; color: #222; }
+        code { background: #f2f2f2; padding: 0.1rem 0.4rem; border-radius: 4px; }
+        h1 { font-size: 1.4rem; }
+    </style>
+</head>
+<body>
+    <h1>StudyBuddy API is running</h1>
+    <p>No frontend build found at <code>src/frontend/index.html</code> yet - this
+       status page is served instead so the server never 404s on
+       <code>/</code>. Person 3: drop your build there.</p>
+    <p>Try the API directly:</p>
+    <ul>
+        <li><code>GET /api/health.bxm</code></li>
+        <li><code>GET /api/ask.bxm?question=What+is+a+primary+key%3F</code></li>
+        <li><code>GET /api/quiz.bxm?topic=normalization&count=3</code></li>
+    </ul>
+</body>
+</html>

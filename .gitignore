@@ -1,0 +1,10 @@
+.env
+boxlang_modules/
+.testbox/
+*.log
+.DS_Store
+node_modules/
+target/
+*.class
+.vscode/
+.idea/
