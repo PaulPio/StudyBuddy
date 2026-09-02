@@ -1,0 +1,82 @@
+import src.integration.StudyBuddyService;
+import src.integration.mocks.MockQuizGenerator;
+
+/**
+ * Integration-layer tests, run against the mocks so they're fast,
+ * deterministic, and don't need an API key. These are the tests that
+ * prove the pipeline (ask / startQuiz / submitQuiz) actually holds
+ * together end to end - swap useMockAgent/useMockStore to false locally
+ * to smoke-test against the real implementations once they exist.
+ *
+ * The quiz tests inject MockQuizGenerator too: the real QuizGenerator
+ * calls aiChat() directly, and this suite is meant to run without a live
+ * AI provider or API key - see MockQuizGenerator's docblock.
+ */
+class extends="testbox.system.BaseSpec" {
+
+    function run() {
+        describe( "StudyBuddyService (against mocks)", () => {
+
+            beforeEach( () => {
+                variables.service = new StudyBuddyService( {
+                    useMockStore : true,
+                    useMockAgent : true,
+                    quizGenerator: new MockQuizGenerator()
+                } );
+                var here = getDirectoryFromPath( getCurrentTemplatePath() );
+                variables.service.ingestSampleData( here & "../../sample-data" );
+            } );
+
+            describe( "ask()", () => {
+                it( "returns an answer with at least one cited source", () => {
+                    var result = variables.service.ask( question: "What is a primary key?" );
+
+                    expect( result ).toHaveKey( "answer" );
+                    expect( result ).toHaveKey( "sources" );
+                    expect( result.sources ).notToBeEmpty();
+                    expect( result.sources[ 1 ] ).toHaveKey( "document" );
+                    expect( result.sources[ 1 ] ).toHaveKey( "page" );
+                } );
+            } );
+
+            describe( "startQuiz() + submitQuiz() (with a mock quiz generator - no live AI call)", () => {
+                it( "starts a quiz whose questions never leak the correct answer", () => {
+                    var quiz = variables.service.startQuiz( topic: "normalization", count: 3 );
+
+                    expect( quiz ).toHaveKey( "sessionId" );
+                    expect( quiz.questions ).notToBeEmpty();
+                    quiz.questions.each( q => {
+                        expect( q ).notToHaveKey( "correctIndex" );
+                        expect( q ).notToHaveKey( "explanation" );
+                    } );
+                } );
+
+                it( "grades a submitted quiz and returns a score", () => {
+                    var quiz = variables.service.startQuiz( topic: "normalization", count: 2 );
+
+                    // Answer everything with choice 0 - we don't know or care
+                    // if that's right, we're only testing the plumbing here.
+                    var answers = {};
+                    quiz.questions.each( q => { answers[ q.id ] = 0; } );
+
+                    var graded = variables.service.submitQuiz(
+                        sessionId: quiz.sessionId,
+                        answers  : answers
+                    );
+
+                    expect( graded ).toHaveKey( "score" );
+                    expect( graded ).toHaveKey( "total" );
+                    expect( graded.total ).toBe( quiz.questions.len() );
+                } );
+
+                it( "throws QuizNotFoundException for an unknown session id", () => {
+                    expect( () => {
+                        variables.service.submitQuiz( sessionId: "does-not-exist", answers: {} );
+                    } ).toThrow( "QuizNotFoundException" );
+                } );
+            } );
+
+        } );
+    }
+
+}

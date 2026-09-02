@@ -1,0 +1,50 @@
+/**
+ * Scripted end-to-end demo for judging: ingest the sample course,
+ * ask a question, ask the "contradiction" question, then generate and
+ * grade a quiz. Run with:
+ *
+ *     boxlang scripts/run_demo.bxs
+ *
+ * Runs against mocks by default (see StudyBuddyService's config in
+ * Application.bx / here) so it works even before Person 1/2's real
+ * classes exist - flip useMockAgent/useMockStore to false to demo the
+ * real pipeline once they're ready.
+ */
+import src.integration.StudyBuddyService;
+
+println( "=== StudyBuddy demo ===" );
+
+service = new StudyBuddyService( { useMockStore: true, useMockAgent: true } );
+
+println( char( 10 ) & "-- Ingesting sample-data/ --" );
+report = service.ingestSampleData( "sample-data" );
+println( "Documents: #report.documentsIn#  Chunks: #report.chunksOut#" );
+
+println( char( 10 ) & "-- Q: What is a primary key? --" );
+answer = service.ask( question: "What is a primary key?" );
+println( "A: #answer.answer#" );
+println( "Confidence: #answer.confidence#" );
+for ( src in answer.sources ) {
+    println( "  source: #src.document# (p.#src.page#)" );
+}
+
+println( char( 10 ) & "-- Q: Do lecture 1 and lecture 2 agree about composite primary keys? --" );
+contradiction = service.ask( question: "Do lecture 1 and lecture 2 agree about composite primary keys?" );
+println( "A: #contradiction.answer#" );
+
+println( char( 10 ) & "-- Quiz Me: normalization, 3 questions --" );
+quiz = service.startQuiz( topic: "normalization", count: 3 );
+println( "Session: #quiz.sessionId#" );
+for ( q in quiz.questions ) {
+    println( "  Q: #q.question#" );
+}
+
+println( char( 10 ) & "-- Submitting quiz (all answer 0, just to exercise grading) --" );
+answers = {};
+for ( q in quiz.questions ) {
+    answers[ q.id ] = 0;
+}
+graded = service.submitQuiz( sessionId: quiz.sessionId, answers: answers );
+println( "Score: #graded.score#/#graded.total# (#graded.percent#%)" );
+
+println( char( 10 ) & "=== Demo complete ===" );

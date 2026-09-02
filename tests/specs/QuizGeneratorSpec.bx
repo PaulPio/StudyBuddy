@@ -1,0 +1,32 @@
+import src.quiz.QuizGenerator;
+
+/**
+ * QuizGenerator.generate() calls aiChat() for the actual question
+ * writing, which needs a live API key/provider - not something we want
+ * in a fast unit test suite. So this spec only covers the parts that
+ * don't require a real model call: the "no material" guard. Treat an
+ * end-to-end generate() call as something to smoke-test manually (see
+ * scripts/run_demo.bxs) or behind an integration-test tag once a key is
+ * available in CI.
+ */
+class extends="testbox.system.BaseSpec" {
+
+    function run() {
+        describe( "QuizGenerator", () => {
+
+            it( "throws instead of calling the AI when the document store has no matches", () => {
+                var emptyStore = {
+                    search: ( query, limit = 5 ) => []
+                };
+
+                var generator = new QuizGenerator( emptyStore );
+
+                expect( () => {
+                    generator.generate( topic: "a topic nothing covers" );
+                } ).toThrow( "QuizGenerationException" );
+            } );
+
+        } );
+    }
+
+}

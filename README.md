@@ -1,56 +1,77 @@
-# StudyBuddy - Paul AI/BX Agent Spec Pack
+# StudyBuddy
 
-Owner: **Paul**  
-Hackathon challenge: **07 - Second Brain**  
-Time limit: **24 hours**  
-Status: **Ready for implementation**
+An AI study agent for the "Second Brain" hackathon challenge (FIU BoxLang
+AI Hackathon), built with [BoxLang AI (bx-ai)](https://ai.ortusbooks.com/).
+Upload course material, ask questions and get cited answers, catch
+contradictions between sources, and generate a graded quiz - all from the
+same material.
 
-## Paul's mission
+## Team split
 
-Build the StudyBuddy agent that receives a student's question, obtains relevant course evidence through Sushant's retrieval interface, and returns a useful answer with verifiable citations.
+| Person | Owns | Folder / docs |
+|---|---|---|
+| Paul | BX Agent / AI | `contracts.md`, `design.md`, `requirements.md`, `system-prompt.md`, `tasks.md`, `study-answer.schema.json` (spec pack, root) |
+| Sushant | Documents / RAG (retrieval) | `src/rag/` |
+| Sam | Frontend / UI | `src/frontend/` |
+| Wilcy | Integration, Quiz Me, testing | `src/quiz/`, `src/integration/`, `tests/` |
 
-Paul owns this transformation:
+Paul's mission: build the StudyBuddy agent that receives a student's
+question, obtains relevant course evidence through Sushant's retrieval
+interface, and returns a useful answer with verifiable citations. His
+full spec pack (API contract, JSON schema, requirements, acceptance
+tests, and a BoxLang starter skeleton) lives in the root-level `.md`
+files listed above - **start there** for anything agent-related.
 
-```text
-question + retrieved evidence -> grounded StudyBuddy response
+Wilcy's integration layer and module contracts (how `src/agent/`,
+`src/rag/`, and `src/frontend/` plug together, and why mocks exist) are
+in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+Demo flow for judging: **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
+
+If your folder is empty, start with the `CONTRACT.md` inside it.
+
+> **Known open item:** two API contracts currently exist side by side -
+> Paul's (`contracts.md` / `study-answer.schema.json`, richer: request
+> IDs, status/claimType, evidence-id citations, structured errors) and
+> Wilcy's first draft in `docs/ARCHITECTURE.md` (simpler:
+> `{answer, sources, confidence}`). The plan is to align the integration
+> layer to Paul's contract, since it's the one Sushant/Sam should build
+> against - see the open pull request for details before building
+> against either one.
+
+## Quickstart
+
+```bash
+box install                                   # installs bx-ai + testbox
+cp .env.example .env                          # then add a real API key
+boxlang-miniserver src/integration/webroot    # API on http://localhost:8080
+box testbox run                               # run the test suite
+boxlang scripts/run_demo.bxs                  # scripted end-to-end demo
 ```
 
-Paul does **not** own document parsing/indexing (Sushant), the interface (Sam), or application-wide integration and Quiz Mode (Wilcy).
+The app runs against mock AI/document-store data out of the box (see
+`docs/ARCHITECTURE.md`), so every piece is demoable before every piece is
+finished.
 
-## Definition of done
+## API (Wilcy's draft - see the open item above)
 
-Paul's part is done when the agent can:
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/health.bxm` | liveness check |
+| GET | `/api/ask.bxm?question=...&courseId=...` | ask a question, get a cited answer |
+| GET | `/api/quiz.bxm?topic=...&count=5` | generate a quiz |
+| POST | `/api/quiz-submit.bxm` | grade a quiz (`{ sessionId, answers }`) |
 
-1. Accept the request described in `contracts.md`.
-2. Call `search_course_materials` and consume Sushant's evidence chunks.
-3. Answer only from those chunks.
-4. Return output valid against `schemas/study-answer.schema.json`.
-5. Cite only evidence IDs actually returned by retrieval.
-6. Say that the course material is insufficient when support is missing.
-7. Pass the P0 acceptance tests in `requirements.md`.
+## Status
 
-## Files
-
-- `requirements.md` - behavioral requirements and acceptance tests.
-- `design.md` - architecture, algorithm, implementation skeleton, and safeguards.
-- `contracts.md` - exact handoff payloads shared with Sushant, Sam, and Wilcy.
-- `system-prompt.md` - copy-ready instructions for the StudyBuddy agent.
-- `tasks.md` - Paul's prioritized hackathon checklist and timebox.
-- `schemas/study-answer.schema.json` - machine-readable response contract.
-
-## MVP rule
-
-Finish normal question answering before adding modes. The team's critical path is:
-
-```text
-Upload -> Ask -> Retrieve -> Answer -> Citation
-```
-
-Contradiction detection, explanation modes, and study guides are useful only after that path works reliably.
-
-## Source basis
-
-- `FIU_BoxLang_AI_Hackathon_10_Challenges.pdf`, page 8: Second Brain requires multiple content types, evidence-backed answers, cross-source connections, contradiction detection, and separation of facts from inference.
-- [BoxLang AI repository](https://github.com/ortus-boxlang/bx-ai)
-- [BoxLang AI agent reference](https://skills.boxlang.io/skills/ortus-boxlang/skills/boxlang-modules~bx-ai~bx-ai-agents)
-
+- [x] Repo scaffolding, folder ownership, module contracts (Wilcy)
+- [x] Paul's agent spec pack: contract, schema, requirements, design (Paul)
+- [x] Quiz Me (generate + grade), with tests (Wilcy)
+- [x] Integration layer + HTTP API, running against mocks (Wilcy)
+- [x] Demo sample data (with an intentional contradiction for the demo) (Wilcy)
+- [ ] Reconcile Wilcy's API contract with Paul's `contracts.md` / schema
+- [ ] Real `src/agent/StudyBuddyAgent.bx` (Paul)
+- [ ] Real `src/rag/DocumentStore.bx` (Sushant)
+- [ ] Real `src/frontend/` (Sam)
+- [ ] `box testbox run` executed against a real BoxLang runtime (not yet
+      verified in the sandbox this scaffold was written in - see the
+      note at the bottom of `docs/ARCHITECTURE.md`)

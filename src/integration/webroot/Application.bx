@@ -1,0 +1,57 @@
+/**
+ * Shared setup for every request handled by boxlang-miniserver under this
+ * webroot. Builds one StudyBuddyService per application and ingests the
+ * demo sample data once at startup, so /api/ask and /api/quiz have
+ * something to search from the moment the server comes up.
+ */
+class {
+
+    this.name    = "studybuddy";
+    this.sessionManagement = true;
+
+    // Map "src" to the real src/ folder (two levels up from this file:
+    // src/integration/webroot/Application.bx -> src/) so every `import
+    // src.xxx.Yyy;` / `new src.xxx.Yyy()` in the app resolves the same
+    // way regardless of where boxlang-miniserver's webroot happens to be.
+    // external: false keeps it out of reach of direct HTTP requests.
+    this.mappings = {
+        "/src" : {
+            path    : expandPath( "../../" ),
+            external: false
+        }
+    };
+
+    function onApplicationStart() {
+        // Repo root is three levels up from this file's directory
+        // (src/integration/webroot/Application.bx -> repo root). Using
+        // getCurrentTemplatePath() instead of a leading-slash expandPath()
+        // so this doesn't depend on how the webroot mapping is set up.
+        var here     = getDirectoryFromPath( getCurrentTemplatePath() );
+        var repoRoot = here & "../../../";
+
+        application.studyBuddyService = new src.integration.StudyBuddyService( {
+            useMockStore: true, // Person 2: flip to false once DocumentStore.bx exists
+            useMockAgent: true  // Person 1: flip to false once StudyBuddyAgent.bx exists
+        } );
+
+        application.studyBuddyService.ingestSampleData( repoRoot & "sample-data" );
+
+        return true;
+    }
+
+    function onRequestStart( required string targetPage ) {
+        // Let a locally-served frontend (e.g. a Vite/live-server dev
+        // server on a different port) call this API during development.
+        bx:header name="Access-Control-Allow-Origin" value="*";
+        bx:header name="Access-Control-Allow-Methods" value="GET, POST, OPTIONS";
+        bx:header name="Access-Control-Allow-Headers" value="Content-Type";
+
+        if ( cgi.request_method == "OPTIONS" ) {
+            bx:header statusCode=204;
+            return false; // short-circuit preflight requests
+        }
+
+        return true;
+    }
+
+}

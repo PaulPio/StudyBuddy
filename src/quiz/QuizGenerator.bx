@@ -1,0 +1,81 @@
+import src.quiz.QuizQuestion;
+import src.quiz.QuizSession;
+
+/**
+ * Generates a QuizSession from course material. Retrieves relevant chunks
+ * through IDocumentStore (real or mock), then asks the model for
+ * structured QuizQuestion objects via aiChat()'s returnFormat - so we get
+ * typed data back instead of parsing free text.
+ *
+ * This is Person 4's headline feature ("Quiz Me"): it works standalone
+ * against the mock document store today, and automatically gets smarter
+ * once Person 2's real DocumentStore is wired in (see
+ * StudyBuddyService.bx / config/boxlang.json's useMocks flag).
+ */
+class {
+
+    property name="documentStore"; // IDocumentStore (real or mock)
+
+    function init( required any documentStore ) {
+        variables.documentStore = arguments.documentStore;
+        return this;
+    }
+
+    /**
+     * @topic    What to quiz on, e.g. "database normalization".
+     * @courseId Optional course/collection scope.
+     * @count    Number of questions to generate.
+     *
+     * @return QuizSession
+     */
+    public any function generate(
+        required string topic,
+        string courseId = "",
+        numeric count = 5
+    ) {
+        var chunks = variables.documentStore.search( arguments.topic, 8 );
+
+        if ( chunks.isEmpty() ) {
+            throw(
+                type    = "QuizGenerationException",
+                message = "No course material found for topic '#arguments.topic#'. Ingest some documents first."
+            );
+        }
+
+        var contextBlock = chunks.map( ( c, i ) => {
+            return "[#i#] (#c.fileName#, p.#c.page#) #c.content#";
+        } ).toList( char( 10 ) );
+
+        var prompt = "
+            You are writing a multiple-choice quiz for a student, using ONLY
+            the numbered source excerpts below. Do not use outside
+            knowledge. Write exactly #arguments.count# questions about:
+            '#arguments.topic#'.
+
+            Rules for every question:
+            - Exactly 4 answer choices, only one correct.
+            - correctIndex is the 0-based index of the correct choice.
+            - explanation must justify the answer using the source excerpt.
+            - sourceDocument/sourcePage must come from the excerpt you used
+              (the '(file, p.N)' tag before each excerpt) - never invent one.
+            - If two excerpts disagree, write a question that tests whether
+              the student notices the disagreement, and explain both sides
+              in the explanation field.
+
+            SOURCE EXCERPTS:
+            #contextBlock#
+        ";
+
+        var questions = aiChat(
+            messages    : prompt,
+            returnFormat: [ new QuizQuestion() ]
+        );
+
+        return new QuizSession(
+            topic    : arguments.topic,
+            courseId : arguments.courseId,
+            questions: questions
+        );
+    }
+
+}

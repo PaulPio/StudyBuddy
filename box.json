@@ -1,0 +1,24 @@
+{
+    "name":"studybuddy",
+    "version":"0.1.0",
+    "author":"FIU Hackathon Team",
+    "description":"StudyBuddy - an AI study agent built with BoxLang AI (BX Agents) for the Second Brain challenge",
+    "slug":"studybuddy",
+    "type":"boxlang-app",
+    "private":true,
+    "dependencies":{
+        "bx-ai":"^2"
+    },
+    "devDependencies":{
+        "testbox":"^6"
+    },
+    "scripts":{
+        "start":"boxlang-miniserver src/integration/webroot",
+        "test":"box testbox run",
+        "demo":"boxlang scripts/run_demo.bxs"
+    },
+    "installPaths":{
+        "bx-ai":"modules/bx-ai/",
+        "testbox":"testbox/"
+    }
+}

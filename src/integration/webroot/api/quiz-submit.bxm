@@ -1,0 +1,25 @@
+<bx:script>
+    bx:header name="Content-Type" value="application/json";
+
+    try {
+        var body = deserializeJSON( toString( getHTTPRequestData().content ) );
+
+        if ( !structKeyExists( body, "sessionId" ) || !structKeyExists( body, "answers" ) ) {
+            bx:header statusCode=400;
+            writeOutput( serializeJSON( { error: "Body must include sessionId and answers" } ) );
+            return;
+        }
+
+        var result = application.studyBuddyService.submitQuiz(
+            sessionId: body.sessionId,
+            answers  : body.answers
+        );
+        writeOutput( serializeJSON( result ) );
+    } catch ( QuizNotFoundException e ) {
+        bx:header statusCode=404;
+        writeOutput( serializeJSON( { error: e.message } ) );
+    } catch ( any e ) {
+        bx:header statusCode=500;
+        writeOutput( serializeJSON( { error: e.message ?: "Unexpected error", type: e.type ?: "Error" } ) );
+    }
+</bx:script>

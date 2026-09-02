@@ -1,0 +1,36 @@
+/**
+ * Holds one generated quiz (a set of QuizQuestion) plus the metadata
+ * needed to grade it later. Kept in memory for the hackathon - swap
+ * `variables.store` for a real cache/DB if the quiz needs to survive a
+ * server restart.
+ */
+class {
+
+    property name="id"       type="string";
+    property name="topic"    type="string";
+    property name="courseId" type="string";
+    property name="questions" type="array"; // array of QuizQuestion
+    property name="createdAt" type="date";
+
+    function init(
+        required string topic,
+        string courseId = "",
+        array questions = []
+    ) {
+        variables.id        = createUUID();
+        variables.topic     = arguments.topic;
+        variables.courseId  = arguments.courseId;
+        variables.questions = arguments.questions;
+        variables.createdAt = now();
+        return this;
+    }
+
+    public struct function toPublicStruct() {
+        return {
+            sessionId: variables.id,
+            topic    : variables.topic,
+            questions: variables.questions.map( q => q.toPublicStruct() )
+        };
+    }
+
+}

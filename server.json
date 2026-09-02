@@ -1,0 +1,10 @@
+{
+  "app": {
+    "cfengine": "boxlang"
+  },
+  "web": {
+    "http": {
+      "port": 8080
+    }
+  }
+}

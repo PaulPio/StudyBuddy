@@ -1,0 +1,41 @@
+/**
+ * Fake IStudyBuddyAgent used until Person 1's real
+ * src/agent/StudyBuddyAgent.bx exists, and in unit tests so we don't burn
+ * API credits or need a key just to test the integration layer.
+ */
+class {
+
+    property name="documentStore";
+
+    function init( required any documentStore ) {
+        variables.documentStore = arguments.documentStore;
+        return this;
+    }
+
+    public struct function ask(
+        required string question,
+        string courseId = "",
+        array history = []
+    ) {
+        var chunks = variables.documentStore.search( arguments.question, 3 );
+
+        if ( chunks.isEmpty() ) {
+            return {
+                answer    : "I couldn't find anything about that in the course materials.",
+                sources   : [],
+                confidence: "low"
+            };
+        }
+
+        var sources = chunks.map( c => {
+            return { document: c.fileName, page: c.page };
+        } );
+
+        return {
+            answer    : "[MOCK ANSWER] Based on the course materials: " & chunks[ 1 ].content,
+            sources   : sources,
+            confidence: "medium"
+        };
+    }
+
+}

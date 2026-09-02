@@ -1,0 +1,62 @@
+/**
+ * Fake IDocumentStore used until Person 2's real src/rag/DocumentStore.bx
+ * exists (and in unit tests, so quiz/integration tests don't depend on a
+ * live vector DB or API key). Returns plausible chunks pulled straight out
+ * of sample-data/, including the intentional contradiction, so the whole
+ * app is demoable on day one.
+ */
+class {
+
+    variables.sampleChunks = [
+        {
+            content : "A primary key uniquely identifies each row in a table. It cannot be null and must be unique across all rows.",
+            source  : "sample-data/lecture01-intro-to-databases.md",
+            fileName: "lecture01-intro-to-databases.md",
+            page    : 1,
+            score   : 0.91
+        },
+        {
+            content : "Third normal form (3NF) removes transitive dependencies: every non-key column must depend on the key, the whole key, and nothing but the key.",
+            source  : "sample-data/lecture02-normalization.md",
+            fileName: "lecture02-normalization.md",
+            page    : 2,
+            score   : 0.88
+        },
+        {
+            content : "CONTRADICTION EXAMPLE: Lecture 1 says composite primary keys are discouraged for student-facing tables. Lecture 2's worked example uses a composite primary key (student_id, course_id) for the enrollment table without flagging it as an exception.",
+            source  : "sample-data/lecture02-normalization.md",
+            fileName: "lecture02-normalization.md",
+            page    : 3,
+            score   : 0.83
+        },
+        {
+            content : "Attendance policy: two or more unexcused absences before the midterm may result in a one-letter-grade reduction.",
+            source  : "sample-data/syllabus.md",
+            fileName: "syllabus.md",
+            page    : 1,
+            score   : 0.62
+        }
+    ];
+
+    public struct function ingestFolder( required string path, struct options = {} ) {
+        return {
+            documentsIn: 3,
+            chunksOut  : variables.sampleChunks.len(),
+            stored     : variables.sampleChunks.len()
+        };
+    }
+
+    public array function search( required string query, numeric limit = 5 ) {
+        // Mock: ignore the query's semantics, just return up to `limit`
+        // sample chunks so callers can exercise the real shape end-to-end.
+        var results = [];
+        for ( var chunk in variables.sampleChunks ) {
+            if ( results.len() >= arguments.limit ) {
+                break;
+            }
+            results.append( chunk );
+        }
+        return results;
+    }
+
+}

@@ -1,0 +1,25 @@
+<bx:script>
+    bx:header name="Content-Type" value="application/json";
+
+    try {
+        var topic    = url.topic ?: "";
+        var courseId = url.courseId ?: "";
+        var count    = isNumeric( url.count ?: "" ) ? val( url.count ) : 5;
+
+        if ( !len( trim( topic ) ) ) {
+            bx:header statusCode=400;
+            writeOutput( serializeJSON( { error: "Missing required query param: topic" } ) );
+            return;
+        }
+
+        var quiz = application.studyBuddyService.startQuiz(
+            topic   : topic,
+            courseId: courseId,
+            count   : count
+        );
+        writeOutput( serializeJSON( quiz ) );
+    } catch ( any e ) {
+        bx:header statusCode=500;
+        writeOutput( serializeJSON( { error: e.message ?: "Unexpected error", type: e.type ?: "Error" } ) );
+    }
+</bx:script>

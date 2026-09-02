@@ -1,0 +1,7 @@
+/**
+ * BoxLang CLI test runner - no web server needed. Run with:
+ *     boxlang tests/runner.bxs
+ * from the repo root. Runs every spec under tests/specs/.
+ */
+r = new testbox.system.TestBox( directory="tests.specs" )
+println( r.run() )
