@@ -1,0 +1,14 @@
+println( "Testing Ollama embeddings..." )
+
+embedding = aiEmbed(
+    input: "Normalization organizes database tables to reduce redundancy.",
+    params: {
+        model: "nomic-embed-text"
+    },
+    options: {
+        provider: "ollama"
+    }
+)
+
+println( "Embedding generated!" )
+println( "Number of values: " & embedding.len() )

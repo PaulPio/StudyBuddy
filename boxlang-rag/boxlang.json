@@ -1,0 +1,13 @@
+{
+    "modules": {
+        "bxai": {
+            "settings": {
+                "provider": "gemini",
+                "apiKey": "${GEMINI_API_KEY}",
+                "defaultParams": {
+                    "model": "gemini-2.5-flash"
+                }
+            }
+        }
+    }
+}

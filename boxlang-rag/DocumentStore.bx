@@ -1,0 +1,44 @@
+class {
+
+    function init() {
+        variables.memory = aiMemory(
+            memory: "boxvector",
+            config: {
+                embeddingProvider: "ollama",
+                embeddingModel: "nomic-embed-text"
+            }
+        )
+
+        return this
+    }
+
+    function addDocument( required string filePath ) {
+
+        aiDocuments(
+            source: arguments.filePath
+        ).toMemory( variables.memory )
+
+        return {
+            success: true,
+            file: arguments.filePath
+        }
+    }
+
+    function addDocuments( required array files ) {
+
+        var results = []
+
+        for ( var filePath in arguments.files ) {
+            results.append(
+                addDocument( filePath )
+            )
+        }
+
+        return results
+    }
+
+    function getMemory() {
+        return variables.memory
+    }
+
+}

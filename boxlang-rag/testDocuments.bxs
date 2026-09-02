@@ -1,0 +1,103 @@
+println( "Starting StudyBuddy AI RAG..." )
+
+// ============================
+// 1. Create vector memory
+// ============================
+
+memory = aiMemory(
+    memory: "boxvector",
+    config: {
+        embeddingProvider: "ollama",
+        embeddingModel: "nomic-embed-text"
+    }
+)
+
+println( "Memory created!" )
+
+// ============================
+// 2. Load study document
+// ============================
+
+document = aiDocuments(
+    source: expandPath( "./docs/study_notes.txt" )
+)
+
+println( "Document loaded!" )
+
+// ============================
+// 3. Add document to memory
+// ============================
+
+document.toMemory( memory )
+
+println( "Document indexed!" )
+
+// ============================
+// 4. Ask a question
+// ============================
+
+question = "What is renewable energy?"
+
+println( "============================" )
+println( "Question: " & question )
+
+// ============================
+// 5. Retrieve relevant context
+// ============================
+
+results = memory.getRelevant(
+    question,
+    3
+)
+
+if ( results.len() > 0 ) {
+
+    context = ""
+
+    for ( result in results ) {
+        context &= result.text & "\n\n"
+    }
+
+    println( "Relevant document found!" )
+    println( "============================" )
+    println( "Retrieved Context:" )
+    println( context )
+
+    // ============================
+    // 6. Ask Gemini
+    // ============================
+
+    prompt = "
+Answer the question using ONLY the information in the context below.
+
+Context:
+#context#
+
+Question:
+#question#
+
+Give a clear and simple answer for a student.
+"
+
+    println( "============================" )
+    println( "Generating AI answer..." )
+
+    response = aiChat(
+        messages: prompt,
+        params: {
+            model: "gemini-2.5-flash"
+        },
+        options: {
+            provider: "gemini"
+        }
+    )
+
+    println( "============================" )
+    println( "AI Answer:" )
+    println( response )
+
+} else {
+
+    println( "No relevant documents found." )
+
+}

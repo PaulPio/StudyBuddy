@@ -1,0 +1,41 @@
+class RAGService {
+
+    function createMemory() {
+        return aiMemory(
+            memory: "boxvector",
+            config: {
+                embeddingProvider: "ollama",
+                embeddingModel: "nomic-embed-text"
+            }
+        )
+    }
+
+    function indexDocuments( memory ) {
+        loader = aiDocuments(
+            source: expandPath( "./docs" )
+        )
+
+        return loader.toMemory( memory )
+    }
+
+    function searchDocuments( memory, question, maxResults = 3 ) {
+        results = memory.getRelevant(
+            question,
+            maxResults
+        )
+
+        output = []
+
+        for ( result in results ) {
+            if ( result.score >= 0.50 ) {
+                output.append({
+                    text: result.text,
+                    source: result.metadata.source,
+                    score: result.score
+                })
+            }
+        }
+
+        return output
+    }
+}

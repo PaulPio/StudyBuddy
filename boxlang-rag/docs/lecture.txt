@@ -1,0 +1,11 @@
+Database Systems Lecture 1
+
+A database is an organized collection of data.
+
+Normalization is the process of organizing data in a database to reduce redundancy and improve data integrity.
+
+First Normal Form (1NF) requires that each column contains atomic values and that there are no repeating groups.
+
+Second Normal Form (2NF) requires 1NF and that every non-key attribute depends on the entire primary key.
+
+Third Normal Form (3NF) requires 2NF and removes transitive dependencies.

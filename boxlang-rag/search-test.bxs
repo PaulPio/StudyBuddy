@@ -1,0 +1,27 @@
+println( "Starting RAG search..." )
+
+memory = aiMemory(
+    memory: "boxvector",
+    config: {
+        embeddingProvider: "ollama",
+        embeddingModel: "nomic-embed-text"
+    }
+)
+
+println( "Memory created!" )
+
+loader = aiDocuments(
+    source: expandPath( "./docs/lecture.txt" )
+)
+
+loader.toMemory( memory )
+
+println( "Document indexed!" )
+
+results = memory.getRelevant(
+    "What is normalization?",
+    3
+)
+
+println( "Search results:" )
+println( results )

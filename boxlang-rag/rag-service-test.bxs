@@ -1,0 +1,32 @@
+println( "Starting PDF RAG test..." )
+
+memory = aiMemory(
+    memory: "boxvector",
+    config: {
+        embeddingProvider: "ollama",
+        embeddingModel: "nomic-embed-text"
+    }
+)
+
+println( "Memory created!" )
+
+pdfLoader = aiDocuments(
+    source: expandPath( "./docs/random_study_notes.pdf" )
+)
+
+println( "PDF loaded!" )
+
+pdfResult = pdfLoader.toMemory( memory )
+
+println( "PDF indexed!" )
+println( pdfResult )
+
+println( "============================" )
+
+results = memory.getRelevant(
+    "What is renewable energy?",
+    3
+)
+
+println( "Search results:" )
+println( results )

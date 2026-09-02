@@ -1,0 +1,4 @@
+docs = aiDocuments( expandPath( "./docs/lecture.txt" ) ).load()
+
+println( "Documents loaded:" )
+println( docs )

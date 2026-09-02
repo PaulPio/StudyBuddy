@@ -1,0 +1,6 @@
+println( "Starting memory test..." )
+
+memory = aiMemory( "boxvector" )
+
+println( "Memory created!" )
+println( memory )

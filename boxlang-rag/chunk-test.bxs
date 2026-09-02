@@ -1,0 +1,11 @@
+docs = aiDocuments( expandPath( "./docs/lecture.txt" ) )
+    .chunkSize( 100 )
+    .overlap( 20 )
+    .load()
+
+println( "Number of chunks: " & docs.len() )
+
+for ( doc in docs ) {
+    println( "--------------------" )
+    println( doc.content )
+}

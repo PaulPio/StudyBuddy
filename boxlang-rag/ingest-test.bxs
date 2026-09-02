@@ -1,0 +1,22 @@
+println( "Starting RAG ingestion..." )
+
+memory = aiMemory(
+    memory: "boxvector",
+    config: {
+        embeddingProvider: "ollama",
+        embeddingModel: "nomic-embed-text"
+    }
+)
+
+println( "Memory created!" )
+
+loader = aiDocuments(
+    source: expandPath( "./docs/random_study_notes.pdf" )
+)
+
+println( "Document loaded!" )
+
+result = loader.toMemory( memory )
+
+println( "Document ingested!" )
+println( result )

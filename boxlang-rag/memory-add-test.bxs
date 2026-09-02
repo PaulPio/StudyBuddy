@@ -1,0 +1,13 @@
+println( "Loading document..." )
+
+docs = aiDocuments( expandPath( "./docs/lecture.txt" ) ).load()
+
+println( "Document loaded!" )
+
+memory = aiMemory( "boxvector" )
+
+println( "Memory created!" )
+
+memory.addAll( docs )
+
+println( "Document added to memory!" )
