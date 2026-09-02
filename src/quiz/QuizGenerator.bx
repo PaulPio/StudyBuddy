@@ -44,7 +44,7 @@ class {
 
         var contextBlock = chunks.map( ( c, i ) => {
             return "[#i#] (#c.fileName#, p.#c.page#) #c.content#";
-        } ).toList( chr( 10 ) );
+        } ).toList( char( 10 ) );
 
         var prompt = "
             You are writing a multiple-choice quiz for a student, using ONLY

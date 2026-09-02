@@ -16,11 +16,11 @@ println( "=== StudyBuddy demo ===" );
 
 service = new StudyBuddyService( { useMockStore: true, useMockAgent: true } );
 
-println( chr( 10 ) & "-- Ingesting sample-data/ --" );
+println( char( 10 ) & "-- Ingesting sample-data/ --" );
 report = service.ingestSampleData( "sample-data" );
 println( "Documents: #report.documentsIn#  Chunks: #report.chunksOut#" );
 
-println( chr( 10 ) & "-- Q: What is a primary key? --" );
+println( char( 10 ) & "-- Q: What is a primary key? --" );
 answer = service.ask( question: "What is a primary key?" );
 println( "A: #answer.answer#" );
 println( "Confidence: #answer.confidence#" );
@@ -28,18 +28,18 @@ for ( src in answer.sources ) {
     println( "  source: #src.document# (p.#src.page#)" );
 }
 
-println( chr( 10 ) & "-- Q: Do lecture 1 and lecture 2 agree about composite primary keys? --" );
+println( char( 10 ) & "-- Q: Do lecture 1 and lecture 2 agree about composite primary keys? --" );
 contradiction = service.ask( question: "Do lecture 1 and lecture 2 agree about composite primary keys?" );
 println( "A: #contradiction.answer#" );
 
-println( chr( 10 ) & "-- Quiz Me: normalization, 3 questions --" );
+println( char( 10 ) & "-- Quiz Me: normalization, 3 questions --" );
 quiz = service.startQuiz( topic: "normalization", count: 3 );
 println( "Session: #quiz.sessionId#" );
 for ( q in quiz.questions ) {
     println( "  Q: #q.question#" );
 }
 
-println( chr( 10 ) & "-- Submitting quiz (all answer 0, just to exercise grading) --" );
+println( char( 10 ) & "-- Submitting quiz (all answer 0, just to exercise grading) --" );
 answers = {};
 for ( q in quiz.questions ) {
     answers[ q.id ] = 0;
@@ -47,4 +47,4 @@ for ( q in quiz.questions ) {
 graded = service.submitQuiz( sessionId: quiz.sessionId, answers: answers );
 println( "Score: #graded.score#/#graded.total# (#graded.percent#%)" );
 
-println( chr( 10 ) & "=== Demo complete ===" );
+println( char( 10 ) & "=== Demo complete ===" );
