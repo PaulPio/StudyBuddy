@@ -1,24 +1,42 @@
 # StudyBuddy
 
-An AI study agent for the "Second Brain" hackathon challenge, built with
-[BoxLang AI (bx-ai)](https://ai.ortusbooks.com/). Upload course material,
-ask questions and get cited answers, catch contradictions between
-sources, and generate a graded quiz - all from the same material.
+An AI study agent for the "Second Brain" hackathon challenge (FIU BoxLang
+AI Hackathon), built with [BoxLang AI (bx-ai)](https://ai.ortusbooks.com/).
+Upload course material, ask questions and get cited answers, catch
+contradictions between sources, and generate a graded quiz - all from the
+same material.
 
 ## Team split
 
-| Person | Owns | Folder |
+| Person | Owns | Folder / docs |
 |---|---|---|
-| 1 | BX Agent / AI | `src/agent/` |
-| 2 | Documents / RAG | `src/rag/` |
-| 3 | Frontend / UI | `src/frontend/` |
-| 4 | Integration, Quiz Me, testing | `src/quiz/`, `src/integration/`, `tests/` |
+| Paul | BX Agent / AI | `contracts.md`, `design.md`, `requirements.md`, `system-prompt.md`, `tasks.md`, `study-answer.schema.json` (spec pack, root) |
+| Sushant | Documents / RAG (retrieval) | `src/rag/` |
+| Sam | Frontend / UI | `src/frontend/` |
+| Wilcy | Integration, Quiz Me, testing | `src/quiz/`, `src/integration/`, `tests/` |
 
-Full architecture, the contracts between modules, and why mocks exist:
-see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
-Demo flow for judging: see **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
+Paul's mission: build the StudyBuddy agent that receives a student's
+question, obtains relevant course evidence through Sushant's retrieval
+interface, and returns a useful answer with verifiable citations. His
+full spec pack (API contract, JSON schema, requirements, acceptance
+tests, and a BoxLang starter skeleton) lives in the root-level `.md`
+files listed above - **start there** for anything agent-related.
+
+Wilcy's integration layer and module contracts (how `src/agent/`,
+`src/rag/`, and `src/frontend/` plug together, and why mocks exist) are
+in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+Demo flow for judging: **[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)**.
 
 If your folder is empty, start with the `CONTRACT.md` inside it.
+
+> **Known open item:** two API contracts currently exist side by side -
+> Paul's (`contracts.md` / `study-answer.schema.json`, richer: request
+> IDs, status/claimType, evidence-id citations, structured errors) and
+> Wilcy's first draft in `docs/ARCHITECTURE.md` (simpler:
+> `{answer, sources, confidence}`). The plan is to align the integration
+> layer to Paul's contract, since it's the one Sushant/Sam should build
+> against - see the open pull request for details before building
+> against either one.
 
 ## Quickstart
 
@@ -34,7 +52,7 @@ The app runs against mock AI/document-store data out of the box (see
 `docs/ARCHITECTURE.md`), so every piece is demoable before every piece is
 finished.
 
-## API
+## API (Wilcy's draft - see the open item above)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -45,13 +63,15 @@ finished.
 
 ## Status
 
-- [x] Repo scaffolding, folder ownership, module contracts
-- [x] Quiz Me (generate + grade), with tests
-- [x] Integration layer + HTTP API, running against mocks
-- [x] Demo sample data (with an intentional contradiction for the demo)
-- [ ] Real `src/agent/StudyBuddyAgent.bx` (Person 1)
-- [ ] Real `src/rag/DocumentStore.bx` (Person 2)
-- [ ] Real `src/frontend/` (Person 3)
+- [x] Repo scaffolding, folder ownership, module contracts (Wilcy)
+- [x] Paul's agent spec pack: contract, schema, requirements, design (Paul)
+- [x] Quiz Me (generate + grade), with tests (Wilcy)
+- [x] Integration layer + HTTP API, running against mocks (Wilcy)
+- [x] Demo sample data (with an intentional contradiction for the demo) (Wilcy)
+- [ ] Reconcile Wilcy's API contract with Paul's `contracts.md` / schema
+- [ ] Real `src/agent/StudyBuddyAgent.bx` (Paul)
+- [ ] Real `src/rag/DocumentStore.bx` (Sushant)
+- [ ] Real `src/frontend/` (Sam)
 - [ ] `box testbox run` executed against a real BoxLang runtime (not yet
-      verified in the environment this scaffold was written in - see the
+      verified in the sandbox this scaffold was written in - see the
       note at the bottom of `docs/ARCHITECTURE.md`)
