@@ -1,0 +1,42 @@
+import src.quiz.QuizQuestion;
+import src.quiz.QuizSession;
+
+/**
+ * Fake quiz generator for tests. The real QuizGenerator calls aiChat()
+ * directly (there's no separate "real vs mock" AI provider the way there
+ * is for the agent/document store), so this exists purely so
+ * StudyBuddyServiceSpec can test startQuiz()/submitQuiz() - the
+ * orchestration and grading logic - without needing a live AI provider
+ * or API key. It matches QuizGenerator's generate() signature exactly.
+ */
+class {
+
+    /**
+     * @return QuizSession, same as the real QuizGenerator.generate()
+     */
+    public any function generate(
+        required string topic,
+        string courseId = "",
+        numeric count = 3
+    ) {
+        var questions = [];
+
+        for ( var i = 1; i <= arguments.count; i++ ) {
+            var q = new QuizQuestion();
+            q.setQuestion( "[MOCK] Question #i# about #arguments.topic#?" );
+            q.setChoices( [ "A. Option A", "B. Option B", "C. Option C", "D. Option D" ] );
+            q.setCorrectIndex( 1 );
+            q.setExplanation( "Mock explanation for question #i#." );
+            q.setSourceDocument( "sample-data/lecture02-normalization.md" );
+            q.setSourcePage( 2 );
+            questions.append( q );
+        }
+
+        return new QuizSession(
+            topic    : arguments.topic,
+            courseId : arguments.courseId,
+            questions: questions
+        );
+    }
+
+}
