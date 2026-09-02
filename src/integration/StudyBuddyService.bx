@@ -30,7 +30,12 @@ class {
     /**
      * @config Optional overrides, mainly for tests:
      *         { useMockAgent: boolean, useMockStore: boolean,
-     *           documentStore: any, agent: any }
+     *           documentStore: any, agent: any, quizGenerator: any }
+     *         quizGenerator defaults to the real QuizGenerator (it calls
+     *         aiChat() directly, there's no mock/real split for it like
+     *         there is for the agent/store) - pass a fake one with a
+     *         generate() method in tests that shouldn't hit a live AI
+     *         provider. See StudyBuddyServiceSpec.bx for an example.
      */
     function init( struct config = {} ) {
         var useMockStore = arguments.config.useMockStore ?: true;
@@ -44,7 +49,7 @@ class {
             useMockAgent ? new MockStudyBuddyAgent( variables.documentStore ) : createRealAgent()
         );
 
-        variables.quizGenerator = new QuizGenerator( variables.documentStore );
+        variables.quizGenerator = arguments.config.quizGenerator ?: new QuizGenerator( variables.documentStore );
         variables.quizGrader    = new QuizGrader();
 
         return this;

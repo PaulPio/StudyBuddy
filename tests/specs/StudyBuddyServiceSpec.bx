@@ -1,4 +1,5 @@
 import src.integration.StudyBuddyService;
+import src.integration.mocks.MockQuizGenerator;
 
 /**
  * Integration-layer tests, run against the mocks so they're fast,
@@ -6,6 +7,10 @@ import src.integration.StudyBuddyService;
  * prove the pipeline (ask / startQuiz / submitQuiz) actually holds
  * together end to end - swap useMockAgent/useMockStore to false locally
  * to smoke-test against the real implementations once they exist.
+ *
+ * The quiz tests inject MockQuizGenerator too: the real QuizGenerator
+ * calls aiChat() directly, and this suite is meant to run without a live
+ * AI provider or API key - see MockQuizGenerator's docblock.
  */
 class extends="testbox.system.BaseSpec" {
 
@@ -14,8 +19,9 @@ class extends="testbox.system.BaseSpec" {
 
             beforeEach( () => {
                 variables.service = new StudyBuddyService( {
-                    useMockStore: true,
-                    useMockAgent: true
+                    useMockStore : true,
+                    useMockAgent : true,
+                    quizGenerator: new MockQuizGenerator()
                 } );
                 var here = getDirectoryFromPath( getCurrentTemplatePath() );
                 variables.service.ingestSampleData( here & "../../sample-data" );
@@ -33,7 +39,7 @@ class extends="testbox.system.BaseSpec" {
                 } );
             } );
 
-            describe( "startQuiz() + submitQuiz()", () => {
+            describe( "startQuiz() + submitQuiz() (with a mock quiz generator - no live AI call)", () => {
                 it( "starts a quiz whose questions never leak the correct answer", () => {
                     var quiz = variables.service.startQuiz( topic: "normalization", count: 3 );
 
