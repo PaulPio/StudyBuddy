@@ -1,0 +1,33 @@
+{
+	"modules": {
+		"bxai": {
+			"settings": {
+				"provider": "gemini",
+				"apiKey": "${GEMINI_API_KEY}",
+
+				"//": "Low temperature + a length cap for a repeatable demo. Param NAMES are provider-specific, so they live per provider rather than in defaultParams: Gemini rejects flat temperature/max_tokens with a 400 and requires generationConfig.",
+				"providers": {
+					"gemini": {
+						"params": {
+							"model": "gemini-3.6-flash",
+							"generationConfig": {
+								"temperature": 0.1,
+								"maxOutputTokens": 1200
+							}
+						}
+					},
+					"openai": {
+						"params": { "model": "gpt-4o", "temperature": 0.1, "max_tokens": 1200 }
+					},
+					"claude": {
+						"params": { "temperature": 0.1, "max_tokens": 1200 }
+					}
+				},
+
+				"timeout": 60,
+				"logRequest": false,
+				"logResponse": false
+			}
+		}
+	}
+}

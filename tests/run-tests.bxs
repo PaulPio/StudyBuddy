@@ -1,0 +1,76 @@
+/**
+ * StudyBuddy agent test runner.  Run from the repository root:
+ *     boxlang tests/run-tests.bxs
+ * Exits non-zero if anything fails. Needs no API key: retrieval is a fixture fake and the
+ * model is a stub, except for the final mock-provider check which uses bx-ai's own "mock".
+ */
+
+println( "StudyBuddy agent - P0 acceptance tests" );
+println( repeatString( "=", 62 ) );
+
+suite   = new tests.agents.StudyBuddyAgentTest();
+summary = suite.run();
+
+for ( result in summary.results ) {
+	line = ( result.ok ? "  PASS  " : "  FAIL  " ) & result.name;
+	if ( !result.ok && len( result.detail ) ) line &= "   -> got: " & result.detail;
+	println( line );
+}
+
+// ---------------------------------------------------------------------------
+// Wiring check: drive the real bx-ai "mock" provider end to end, so the agent's
+// actual aiAgent()/aiTool()/aiFence() wiring is proven, not just our stubs.
+// ---------------------------------------------------------------------------
+println( "" );
+println( "bx-ai mock provider (real agent wiring)" );
+println( repeatString( "-", 62 ) );
+
+mockOk     = false;
+mockDetail = "";
+try {
+	fixture  = jsonDeserialize( fileRead( getDirectoryFromPath( getCurrentTemplatePath() ) & "fixtures/retrieval-direct.json" ) );
+	searcher = ( courseId, query, limit, filters ) => fixture;
+	tool     = new src.tools.SearchCourseMaterialsTool( searcher );
+
+	// No modelRunner -> the real aiAgent().run() path, pointed at bx-ai's mock provider.
+	// The provider cannot be overridden per call on an agent, so the model carries it.
+	realAgent = new src.agents.StudyBuddyAgent( tool, "", aiModel( "mock" ) );
+	scripted  = '{"status":"answered","answer":"Third normal form reduces duplicated data and prevents update anomalies.",' &
+		'"claimType":"fact","confidence":"high","citations":[{"evidenceId":"ev-lecture05-p12-c03"}],' &
+		'"conflicts":[],"suggestedNextStep":null}';
+
+	mockResult = realAgent.ask(
+		{
+			requestId : "req-mock-1",
+			courseId  : "cop-4710",
+			question  : "Why is third normal form useful?",
+			mode      : "answer"
+		},
+		{ providerOptions: { responses: [ scripted ] } }
+	);
+
+	mockOk = mockResult.status == "answered"
+		&& mockResult.citations.len() == 1
+		&& mockResult.citations[ 1 ].evidenceId == "ev-lecture05-p12-c03"
+		&& mockResult.citations[ 1 ].documentName == "Lecture_05.pdf";
+	mockDetail = "status=#mockResult.status# citations=#mockResult.citations.len()#";
+	if ( !mockOk && !isNull( mockResult.error ) ) mockDetail &= " error=#mockResult.error.code#";
+} catch ( any e ) {
+	mockDetail = "#e.type#: #e.message#";
+}
+println( ( mockOk ? "  PASS  " : "  FAIL  " ) & "real agent + bx-ai mock provider   -> " & mockDetail );
+
+total  = summary.total + 1;
+passed = summary.passed + ( mockOk ? 1 : 0 );
+failed = total - passed;
+
+println( "" );
+println( repeatString( "=", 62 ) );
+println( "  #passed# passed, #failed# failed, #total# total" );
+
+if ( failed ) {
+	println( "  RESULT: FAILED" );
+	systemOutput( "" );
+	createObject( "java", "java.lang.System" ).exit( 1 );
+}
+println( "  RESULT: ALL PASSED" );

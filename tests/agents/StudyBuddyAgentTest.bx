@@ -1,0 +1,329 @@
+/**
+ * P0 acceptance tests (requirements.md T1-T10) for Paul's StudyBuddy agent.
+ *
+ * Retrieval is a fixture-backed fake and the model is a counting stub, so the suite runs
+ * offline, needs no API key, and does not depend on Sushant's unfinished retrieval.
+ * The stub also lets the suite assert *how many times* the model was called - which is how
+ * "empty retrieval never reaches the model" is proven rather than assumed.
+ */
+class {
+
+	function init(){
+		variables.results     = [];
+		variables.fixturePath = getDirectoryFromPath( getCurrentTemplatePath() ) & "../fixtures/";
+		return this;
+	}
+
+	struct function run(){
+		variables.results = [];
+
+		t1_directAnswer();
+		t2_twoChunks();
+		t3_noEvidence();
+		t4_conflict();
+		t5_inventedCitation();
+		t6_missingPage();
+		t7_promptInjection();
+		t8_retrievalFails();
+		t9_blankQuestion();
+		t10_malformedJson();
+		t10b_repairFails();
+		extra_modelUnavailable();
+		extra_invalidRequestVariants();
+		extra_citationsAlwaysFromRetrieval();
+
+		var passed = variables.results.filter( ( r ) => r.ok ).len();
+		return {
+			"results" : variables.results,
+			"passed"  : passed,
+			"failed"  : variables.results.len() - passed,
+			"total"   : variables.results.len()
+		};
+	}
+
+	// ------------------------------------------------------------------ tests
+
+	private function t1_directAnswer(){
+		var f = fake( "retrieval-direct.json" );
+		var m = stub( [ modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03" ] ) ] );
+		var r = agent( f, m ).ask( askRequest() );
+
+		check( "T1 status is answered", r.status == "answered", r.status );
+		check( "T1 claimType is fact", r.claimType == "fact", r.claimType );
+		check( "T1 cites exactly one chunk", r.citations.len() == 1, r.citations.len() );
+		check( "T1 cites the correct evidenceId", r.citations.len() && r.citations[ 1 ].evidenceId == "ev-lecture05-p12-c03", ids( r ) );
+		check( "T1 documentName copied from retrieval", r.citations.len() && r.citations[ 1 ].documentName == "Lecture_05.pdf", ids( r ) );
+		check( "T1 page copied from retrieval", r.citations.len() && r.citations[ 1 ].page == 12, "" );
+		check( "T1 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t2_twoChunks(){
+		var f = fake( "retrieval-multiple.json" );
+		var m = stub( [ modelJson( "answered", "inference", "medium", [ "ev-lecture05-p12-c03", "ev-notes-c07" ] ) ] );
+		var r = agent( f, m ).ask( askRequest( question: "How does normalization affect query performance?" ) );
+
+		check( "T2 status is answered", r.status == "answered", r.status );
+		check( "T2 cites both chunks", r.citations.len() == 2, ids( r ) );
+		check( "T2 claimType is inference or mixed", [ "inference", "mixed" ].findNoCase( r.claimType ) > 0, r.claimType );
+		check( "T2 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t3_noEvidence(){
+		var f = fake( "retrieval-empty.json" );
+		var m = stub( [ modelJson( "answered", "fact", "high", [ "ev-anything" ] ) ] );
+		var r = agent( f, m ).ask( askRequest( question: "What is the grading policy?" ) );
+
+		check( "T3 status is insufficient_evidence", r.status == "insufficient_evidence", r.status );
+		check( "T3 returns no citations", r.citations.len() == 0, ids( r ) );
+		check( "T3 suggests a next step", isSimpleValue( r.suggestedNextStep ) && len( r.suggestedNextStep ), "" );
+		// The point of the whole deterministic-orchestration design:
+		check( "T3 MODEL WAS NEVER CALLED", m.state.count == 0, "model calls = #m.state.count#" );
+		check( "T3 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t4_conflict(){
+		var f = fake( "retrieval-conflict.json" );
+		var m = stub( [ '{"status":"conflicting_evidence","answer":"The two sources disagree on how many normal forms the course covers.",' &
+			'"claimType":"mixed","confidence":"low",' &
+			'"citations":[{"evidenceId":"ev-lecture05-p03-c01"},{"evidenceId":"ev-syllabus-p02-c01"}],' &
+			'"conflicts":[{"description":"Lecture_05 says three normal forms; the syllabus says four.",' &
+			'"evidenceIds":["ev-lecture05-p03-c01","ev-syllabus-p02-c01"]}],"suggestedNextStep":null}' ] );
+		var r = agent( f, m ).ask( askRequest( question: "How many normal forms does the course cover?" ) );
+
+		check( "T4 status is conflicting_evidence", r.status == "conflicting_evidence", r.status );
+		check( "T4 cites both sides", r.citations.len() == 2, ids( r ) );
+		check( "T4 records the conflict", r.conflicts.len() == 1, r.conflicts.len() );
+		check( "T4 conflict names both evidence ids", r.conflicts.len() && r.conflicts[ 1 ].evidenceIds.len() == 2, "" );
+		check( "T4 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t5_inventedCitation(){
+		var f = fake( "retrieval-direct.json" );
+		// Model cites one real id and one it made up.
+		var m = stub( [ modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03", "ev-TOTALLY-MADE-UP" ] ) ] );
+		var r = agent( f, m ).ask( askRequest() );
+
+		check( "T5 invented citation removed", r.citations.len() == 1, ids( r ) );
+		check( "T5 only the real id survives", ids( r ) == "ev-lecture05-p12-c03", ids( r ) );
+		check( "T5 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+
+		// And when EVERY citation is invented, the answer must not stand.
+		var m2 = stub( [ modelJson( "answered", "fact", "high", [ "ev-FAKE-1", "ev-FAKE-2" ] ) ] );
+		var r2 = agent( fake( "retrieval-direct.json" ), m2 ).ask( askRequest() );
+		check( "T5 all-invented downgrades to insufficient_evidence", r2.status == "insufficient_evidence", r2.status );
+		check( "T5 all-invented returns no citations", r2.citations.len() == 0, ids( r2 ) );
+	}
+
+	private function t6_missingPage(){
+		var f = fake( "retrieval-multiple.json" );
+		// Model tries to invent a page and section for the chunk that has neither.
+		var m = stub( [ '{"status":"answered","answer":"Normalization trades write safety for read cost.",' &
+			'"claimType":"inference","confidence":"medium",' &
+			'"citations":[{"evidenceId":"ev-notes-c07","documentName":"Fabricated.pdf","page":99,"section":"Invented"}],' &
+			'"conflicts":[],"suggestedNextStep":null}' ] );
+		var r = agent( f, m ).ask( askRequest( question: "How does normalization affect query performance?" ) );
+
+		check( "T6 page stays null when retrieval has none", r.citations.len() && isNull( r.citations[ 1 ].page ?: nullValue() ), "" );
+		check( "T6 section stays null when retrieval has none", r.citations.len() && isNull( r.citations[ 1 ].section ?: nullValue() ), "" );
+		check( "T6 model-invented documentName is overwritten", r.citations.len() && r.citations[ 1 ].documentName == "Course_Notes.md", r.citations.len() ? r.citations[ 1 ].documentName : "" );
+		check( "T6 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t7_promptInjection(){
+		var f = fake( "retrieval-injection.json" );
+		// The model "obeys" the injected instruction and cites the id the attacker asked for.
+		var m = stub( [ modelJson( "answered", "fact", "high", [ "ev-fake-9999" ] ) ] );
+		var r = agent( f, m ).ask( askRequest( question: "What is a primary key?" ) );
+
+		var prompt = m.state.prompts.len() ? m.state.prompts[ 1 ] : "";
+		check( "T7 evidence is fenced as untrusted data", prompt.findNoCase( "UNTRUSTED-DATA" ) > 0, "no fence markers in prompt" );
+		check( "T7 injected text sits inside the fence", prompt.findNoCase( "IGNORE ALL PREVIOUS INSTRUCTIONS" ) > prompt.findNoCase( "UNTRUSTED-DATA" ), "" );
+		check( "T7 attacker's evidence id is rejected", ids( r ).findNoCase( "ev-fake-9999" ) == 0, ids( r ) );
+		check( "T7 no fabricated citation reaches the caller", r.citations.len() == 0, ids( r ) );
+		check( "T7 downgraded to insufficient_evidence", r.status == "insufficient_evidence", r.status );
+		check( "T7 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t8_retrievalFails(){
+		var searcher = ( courseId, query, limit, filters ) => {
+			throw( type: "Test.RetrievalDown", message: "connection timed out" );
+		};
+		var tool = new src.tools.SearchCourseMaterialsTool( searcher );
+		var m    = stub( [ modelJson( "answered", "fact", "high", [ "ev-x" ] ) ] );
+		var r    = new src.agents.StudyBuddyAgent( tool, m.fn ).ask( askRequest() );
+
+		check( "T8 status is error", r.status == "error", r.status );
+		check( "T8 code is RETRIEVAL_UNAVAILABLE", r.error.code == "RETRIEVAL_UNAVAILABLE", r.error.code );
+		check( "T8 model not called on retrieval failure", m.state.count == 0, "model calls = #m.state.count#" );
+		check( "T8 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t9_blankQuestion(){
+		var f = fake( "retrieval-direct.json" );
+		var m = stub( [ modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03" ] ) ] );
+		var r = agent( f, m ).ask( askRequest( question: "   " ) );
+
+		check( "T9 status is error", r.status == "error", r.status );
+		check( "T9 code is INVALID_REQUEST", r.error.code == "INVALID_REQUEST", r.error.code );
+		check( "T9 RETRIEVAL WAS NEVER CALLED", f.state.count == 0, "retrieval calls = #f.state.count#" );
+		check( "T9 model not called", m.state.count == 0, "model calls = #m.state.count#" );
+		check( "T9 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function t10_malformedJson(){
+		var f = fake( "retrieval-direct.json" );
+		var m = stub( [
+			"Sure! Here is the answer, but not as JSON at all.",
+			modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03" ] )
+		] );
+		var r = agent( f, m ).ask( askRequest() );
+
+		check( "T10 repaired output is answered", r.status == "answered", r.status );
+		check( "T10 exactly one repair attempt was made", m.state.count == 2, "model calls = #m.state.count#" );
+		check( "T10 citation survives repair", ids( r ) == "ev-lecture05-p12-c03", ids( r ) );
+		check( "T10 schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+
+		// A fenced ```json block is tolerated without spending a repair attempt.
+		var m2 = stub( [ "```json" & char( 10 ) & modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03" ] ) & char( 10 ) & "```" ] );
+		var r2 = agent( fake( "retrieval-direct.json" ), m2 ).ask( askRequest() );
+		check( "T10 fenced json parsed without repair", r2.status == "answered" && m2.state.count == 1, "status=#r2.status# calls=#m2.state.count#" );
+	}
+
+	private function t10b_repairFails(){
+		var f = fake( "retrieval-direct.json" );
+		var m = stub( [ "still not json", "and still not json" ] );
+		var r = agent( f, m ).ask( askRequest() );
+
+		check( "T10b code is MODEL_OUTPUT_INVALID", r.status == "error" && r.error.code == "MODEL_OUTPUT_INVALID", r.error.code ?: r.status );
+		check( "T10b stops after ONE repair attempt", m.state.count == 2, "model calls = #m.state.count#" );
+		check( "T10b schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function extra_modelUnavailable(){
+		var f = fake( "retrieval-direct.json" );
+		var m = stub( [ "__THROW__" ] );
+		var r = agent( f, m ).ask( askRequest() );
+
+		check( "EX status is error", r.status == "error", r.status );
+		check( "EX code is MODEL_UNAVAILABLE", r.error.code == "MODEL_UNAVAILABLE", r.error.code );
+		check( "EX schema valid", !validator().validate( r ).len(), validator().validate( r ).toList( "; " ) );
+	}
+
+	private function extra_invalidRequestVariants(){
+		var cases = {
+			"missing requestId" : { courseId: "cop-4710", question: "q" },
+			"missing courseId"  : { requestId: "req-1", question: "q" },
+			"missing question"  : { requestId: "req-1", courseId: "cop-4710" },
+			"bad mode"          : { requestId: "req-1", courseId: "cop-4710", question: "q", mode: "hack" }
+		};
+		for ( var label in cases ) {
+			var f = fake( "retrieval-direct.json" );
+			var m = stub( [ modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03" ] ) ] );
+			var r = agent( f, m ).ask( cases[ label ] );
+			check( "EX invalid request rejected: #label#", r.status == "error" && r.error.code == "INVALID_REQUEST", r.error.code ?: r.status );
+			check( "EX no retrieval for: #label#", f.state.count == 0, "retrieval calls = #f.state.count#" );
+		}
+
+		// A missing mode defaults to "answer" rather than being rejected.
+		var f2 = fake( "retrieval-direct.json" );
+		var m2 = stub( [ modelJson( "answered", "fact", "high", [ "ev-lecture05-p12-c03" ] ) ] );
+		var r2 = agent( f2, m2 ).ask( { requestId: "req-9", courseId: "cop-4710", question: "Why is 3NF useful?" } );
+		check( "EX missing mode defaults to answer", r2.status == "answered", r2.status );
+		check( "EX requestId is preserved", r2.requestId == "req-9", r2.requestId );
+	}
+
+	/** The invariant the whole component exists to guarantee. */
+	private function extra_citationsAlwaysFromRetrieval(){
+		var fixtures = [ "retrieval-direct.json", "retrieval-multiple.json", "retrieval-conflict.json", "retrieval-injection.json" ];
+		var leaked   = [];
+		for ( var name in fixtures ) {
+			var f       = fake( name );
+			var data    = jsonDeserialize( fileRead( variables.fixturePath & name ) );
+			var allowed = data.chunks.map( ( c ) => c.evidenceId );
+			// Ask the model to cite everything real plus some invented ids.
+			var m = stub( [ modelJson( "answered", "fact", "high", allowed.append( "ev-ghost-1" ).append( "ev-ghost-2" ) ) ] );
+			var r = agent( f, m ).ask( askRequest() );
+			for ( var c in r.citations ) {
+				if ( !data.chunks.map( ( x ) => x.evidenceId ).findNoCase( c.evidenceId ) ) leaked.append( "#name#:#c.evidenceId#" );
+			}
+		}
+		check( "EX no citation ever escapes the retrieval set", !leaked.len(), leaked.toList( ", " ) );
+	}
+
+	// ---------------------------------------------------------------- helpers
+
+	/** Fixture-backed fake retrieval that counts its calls. */
+	private struct function fake( required string fixture ){
+		var data  = jsonDeserialize( fileRead( variables.fixturePath & arguments.fixture ) );
+		var state = { "count": 0 };
+		var fn    = ( courseId, query, limit, filters ) => {
+			state.count++;
+			return data;
+		};
+		return { "fn": fn, "state": state, "tool": new src.tools.SearchCourseMaterialsTool( fn ) };
+	}
+
+	/** Model stub: scripted responses, counted calls, captured prompts. */
+	private struct function stub( required array responses ){
+		var state = { "count": 0, "prompts": [] };
+		var fn    = ( prompt, options ) => {
+			state.count++;
+			state.prompts.append( arguments.prompt );
+			var idx = min( state.count, responses.len() );
+			var out = responses[ idx ];
+			if ( isSimpleValue( out ) && out == "__THROW__" ) {
+				throw( type: "Test.ModelDown", message: "provider unreachable" );
+			}
+			return out;
+		};
+		return { "fn": fn, "state": state };
+	}
+
+	private function agent( required struct fake, required struct stub ){
+		return new src.agents.StudyBuddyAgent( arguments.fake.tool, arguments.stub.fn );
+	}
+
+	private function validator(){
+		return new src.agents.StudyAnswerValidator();
+	}
+
+	private struct function askRequest(
+		string requestId = "req-1042",
+		string courseId  = "cop-4710",
+		string question  = "Why is third normal form useful?",
+		string mode      = "answer"
+	){
+		return {
+			requestId : arguments.requestId,
+			courseId  : arguments.courseId,
+			question  : arguments.question,
+			mode      : arguments.mode,
+			filters   : { documentIds: [], chapter: nullValue() }
+		};
+	}
+
+	private string function modelJson(
+		required string status,
+		required string claimType,
+		required string confidence,
+		required array evidenceIds
+	){
+		var cites = arguments.evidenceIds.map( ( id ) => '{"evidenceId":"#id#"}' ).toList( "," );
+		return '{"status":"#arguments.status#","answer":"Third normal form reduces duplicated data and prevents update anomalies.",' &
+			'"claimType":"#arguments.claimType#","confidence":"#arguments.confidence#",' &
+			'"citations":[#cites#],"conflicts":[],"suggestedNextStep":null}';
+	}
+
+	private string function ids( required struct response ){
+		return ( arguments.response.citations ?: [] ).map( ( c ) => c.evidenceId ).toList( "," );
+	}
+
+	private function check( required string name, required any ok, any detail = "" ){
+		variables.results.append( {
+			"name"   : arguments.name,
+			"ok"     : ( isBoolean( arguments.ok ) ? arguments.ok : !!arguments.ok ),
+			"detail" : toString( arguments.detail ?: "" )
+		} );
+	}
+
+}

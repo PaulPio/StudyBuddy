@@ -1,0 +1,65 @@
+/**
+ * Live provider smoke test / integration example / demo freeze.
+ *
+ *     boxlang --bx-config ./boxlang.json demo.bxs
+ *
+ * Runs the four demo scenarios against the REAL provider from boxlang.json, and checks the
+ * guarantee that matters: no citation may exist that retrieval did not return.
+ * Skips cleanly when no API key is set. This is also the shape Wilcy's API route should use.
+ */
+
+if ( !len( server.system.environment.GEMINI_API_KEY ?: "" ) ) {
+	println( "SKIPPED: GEMINI_API_KEY is not set." );
+	println( "  export GEMINI_API_KEY=...  &&  boxlang --bx-config ./boxlang.json demo.bxs" );
+	return;
+}
+
+root      = getDirectoryFromPath( getCurrentTemplatePath() );
+scenarios = [
+	{ name: "direct answer",   fixture: "retrieval-direct.json",    question: "Why is third normal form useful?",              expect: "answered" },
+	{ name: "two chunks",      fixture: "retrieval-multiple.json",  question: "How does normalization affect query performance?", expect: "answered" },
+	{ name: "sources disagree",fixture: "retrieval-conflict.json",  question: "How many normal forms does this course cover?", expect: "conflicting_evidence" },
+	{ name: "no evidence",     fixture: "retrieval-empty.json",     question: "What is the grading policy for the final exam?", expect: "insufficient_evidence" },
+	{ name: "prompt injection",fixture: "retrieval-injection.json", question: "What is a primary key?",                        expect: "answered" }
+];
+
+failures = 0;
+
+for ( s in scenarios ) {
+	fixture  = jsonDeserialize( fileRead( root & "tests/fixtures/" & s.fixture ) );
+	// Swap this closure for Sushant's real search to go live.
+	searcher = ( courseId, query, limit, filters ) => fixture;
+	agent    = new src.agents.StudyBuddyAgent( new src.tools.SearchCourseMaterialsTool( searcher ) );
+
+	response = agent.ask( {
+		requestId : "demo-#createUUID()#",
+		courseId  : "cop-4710",
+		question  : s.question,
+		mode      : "answer"
+	} );
+
+	allowed = fixture.chunks.map( ( c ) => c.evidenceId );
+	leaked  = response.citations.filter( ( c ) => !allowed.findNoCase( c.evidenceId ) );
+	schema  = new src.agents.StudyAnswerValidator().validate( response );
+
+	ok = !leaked.len() && !schema.len();
+	if ( !ok || response.status != s.expect ) failures++;
+
+	println( repeatString( "-", 72 ) );
+	println( "SCENARIO : #s.name#   (expect #s.expect#)" );
+	println( "Q        : #s.question#" );
+	println( "status   : #response.status##( response.status == s.expect ? '' : '   <-- UNEXPECTED' )#" );
+	println( "claimType: #response.claimType#    confidence: #response.confidence#" );
+	println( "answer   : " & left( response.answer, 220 ) );
+	println( "citations: " & ( response.citations.len() ? response.citations.map( ( c ) => "#c.evidenceId# (#c.documentName#, p.#isNull( c.page ?: nullValue() ) ? 'null' : c.page#)" ).toList( "; " ) : "(none)" ) );
+	if ( response.conflicts.len() ) {
+		println( "conflicts: " & response.conflicts.map( ( c ) => c.description & " [" & c.evidenceIds.toList( ", " ) & "]" ).toList( " | " ) );
+	}
+	if ( !isNull( response.error ) ) println( "error    : #response.error.code#" );
+	println( "checks   : " & ( leaked.len() ? "FABRICATED CITATION: " & leaked.map( ( c ) => c.evidenceId ).toList( ", " )
+	                                        : "no fabricated citations" )
+	                        & " | " & ( schema.len() ? "SCHEMA VIOLATION: " & schema.toList( "; " ) : "schema valid" ) );
+}
+
+println( repeatString( "=", 72 ) );
+println( failures ? "RESULT: #failures# scenario(s) did not behave as expected" : "RESULT: all #scenarios.len()# scenarios behaved as expected" );

@@ -1,0 +1,282 @@
+/**
+ * StudyAnswer validation + normalization (Paul).
+ *
+ * Security boundary: the model is trusted to CHOOSE evidence ids and prose, and for nothing else.
+ * Every citation is re-checked against the chunks retrieval actually returned, and all citation
+ * metadata is copied from retrieval - never from the model - so a fabricated filename or page
+ * number cannot reach the UI. The response is rebuilt from a field whitelist, so the result
+ * conforms to study-answer.schema.json by construction.
+ */
+class {
+
+	variables.STATUSES    = [ "answered", "insufficient_evidence", "conflicting_evidence", "error" ];
+	variables.CLAIM_TYPES = [ "fact", "inference", "mixed", "unknown" ];
+	variables.CONFIDENCES = [ "high", "medium", "low" ];
+	variables.ERROR_CODES = [
+		"INVALID_REQUEST",
+		"RETRIEVAL_UNAVAILABLE",
+		"MODEL_UNAVAILABLE",
+		"MODEL_OUTPUT_INVALID",
+		"INTERNAL_ERROR"
+	];
+
+	variables.NO_EVIDENCE_ANSWER = "I could not find enough support in the uploaded course materials to answer that reliably.";
+	variables.NO_EVIDENCE_STEP   = "Upload the relevant chapter or ask a more specific question.";
+
+	// ponytail: "strong evidence" is a score threshold; swap for a calibrated signal if retrieval
+	// ever exposes one. Only applied when retrieval actually supplies scores.
+	variables.HIGH_CONFIDENCE_MIN_SCORE = 0.5;
+
+	/**
+	 * Turn raw model output into a safe, schema-shaped response.
+	 *
+	 * @raw       Parsed model JSON (untrusted).
+	 * @allowed   Struct of evidenceId -> chunk, exactly as returned by retrieval.
+	 * @requestId Echoed from the request; never taken from the model.
+	 */
+	struct function normalize( required struct raw, required struct allowed, required string requestId ){
+		var status     = pick( arguments.raw.status ?: "", variables.STATUSES, "answered" );
+		var citations  = normalizeCitations( arguments.raw.citations ?: [], arguments.allowed );
+		var conflicts  = normalizeConflicts( arguments.raw.conflicts ?: [], arguments.allowed );
+		var answer     = trim( toString( arguments.raw.answer ?: "" ) );
+		var claimType  = pick( arguments.raw.claimType ?: "", variables.CLAIM_TYPES, "unknown" );
+		var confidence = pick( arguments.raw.confidence ?: "", variables.CONFIDENCES, "low" );
+
+		// The model may not declare its own service errors.
+		if ( status == "error" ) status = "answered";
+
+		// An insufficient_evidence answer carries no citations by contract.
+		if ( status == "insufficient_evidence" ) {
+			citations = [];
+			conflicts = [];
+		}
+
+		// A claim with no surviving evidence is not an answer. This is the check that catches
+		// invented evidence ids: they are dropped above, and what is left cannot support a claim.
+		if ( status != "insufficient_evidence" && !citations.len() ) {
+			return insufficient(
+				requestId: arguments.requestId,
+				answer   : len( answer ) ? answer : variables.NO_EVIDENCE_ANSWER
+			);
+		}
+		if ( !len( answer ) ) {
+			return insufficient( requestId: arguments.requestId );
+		}
+
+		// conflicting_evidence must actually cite both sides.
+		if ( status == "conflicting_evidence" && citations.len() < 2 ) {
+			status = "answered";
+		}
+		if ( status == "answered" && conflicts.len() ) {
+			conflicts = [];
+		}
+
+		confidence = capConfidence( confidence, citations, arguments.allowed );
+		if ( status == "insufficient_evidence" ) {
+			claimType  = "unknown";
+			confidence = "low";
+		}
+
+		return {
+			"requestId"         : arguments.requestId,
+			"status"            : status,
+			"answer"            : answer,
+			"claimType"         : claimType,
+			"confidence"        : confidence,
+			"citations"         : citations,
+			"conflicts"         : conflicts,
+			"suggestedNextStep" : optionalString( arguments.raw.suggestedNextStep ?: "" ),
+			"error"             : nullValue()
+		};
+	}
+
+	/** Deterministic insufficient-evidence result. Also used when retrieval returns nothing. */
+	struct function insufficient(
+		required string requestId,
+		string answer   = variables.NO_EVIDENCE_ANSWER,
+		string nextStep = variables.NO_EVIDENCE_STEP
+	){
+		return {
+			"requestId"         : arguments.requestId,
+			"status"            : "insufficient_evidence",
+			"answer"            : len( trim( arguments.answer ) ) ? trim( arguments.answer ) : variables.NO_EVIDENCE_ANSWER,
+			"claimType"         : "unknown",
+			"confidence"        : "low",
+			"citations"         : [],
+			"conflicts"         : [],
+			"suggestedNextStep" : arguments.nextStep,
+			"error"             : nullValue()
+		};
+	}
+
+	/** Structured service error using the stable codes in contracts.md. */
+	struct function errorResponse(
+		required string requestId,
+		required string code,
+		required string message,
+		string answer   = "I could not complete that request right now.",
+		string nextStep = "Try again in a moment."
+	){
+		var code = variables.ERROR_CODES.findNoCase( arguments.code ) ? arguments.code : "INTERNAL_ERROR";
+		return {
+			"requestId"         : len( trim( arguments.requestId ) ) ? arguments.requestId : "unknown",
+			"status"            : "error",
+			"answer"            : arguments.answer,
+			"claimType"         : "unknown",
+			"confidence"        : "low",
+			"citations"         : [],
+			"conflicts"         : [],
+			"suggestedNextStep" : arguments.nextStep,
+			// message is ours, never raw provider text, so keys/PII cannot leak into a response.
+			"error"             : { "code": code, "message": arguments.message }
+		};
+	}
+
+	/**
+	 * Schema conformance check against study-answer.schema.json.
+	 * Returns an array of violation strings; empty means valid.
+	 */
+	array function validate( required any response ){
+		var v = [];
+		if ( !isStruct( arguments.response ) ) return [ "response is not a struct" ];
+
+		var required = [ "requestId", "status", "answer", "claimType", "confidence", "citations", "conflicts", "suggestedNextStep", "error" ];
+		for ( var key in required ) {
+			if ( !arguments.response.keyExists( key ) ) v.append( "missing required field: #key#" );
+		}
+		for ( var key in arguments.response.keyArray() ) {
+			if ( !required.findNoCase( key ) ) v.append( "additional property not allowed: #key#" );
+		}
+		if ( v.len() ) return v;
+
+		var r = arguments.response;
+		if ( !isSimpleValue( r.requestId ) || !len( trim( r.requestId ) ) ) v.append( "requestId must be a non-empty string" );
+		if ( !len( trim( toString( r.answer ?: "" ) ) ) ) v.append( "answer must be a non-empty string" );
+		if ( !variables.STATUSES.findNoCase( r.status ?: "" ) ) v.append( "status not in enum: #r.status ?: ''#" );
+		if ( !variables.CLAIM_TYPES.findNoCase( r.claimType ?: "" ) ) v.append( "claimType not in enum: #r.claimType ?: ''#" );
+		if ( !variables.CONFIDENCES.findNoCase( r.confidence ?: "" ) ) v.append( "confidence not in enum: #r.confidence ?: ''#" );
+
+		if ( !isArray( r.citations ?: "" ) ) {
+			v.append( "citations must be an array" );
+		} else {
+			for ( var c in r.citations ) {
+				if ( !isStruct( c ) ) { v.append( "citation is not a struct" ); continue; }
+				var keys = [ "evidenceId", "documentName", "page", "section" ];
+				for ( var key in keys ) {
+					if ( !c.keyExists( key ) ) v.append( "citation missing #key#" );
+				}
+				for ( var key in c.keyArray() ) {
+					if ( !keys.findNoCase( key ) ) v.append( "citation has extra property: #key#" );
+				}
+				if ( !len( trim( toString( c.evidenceId ?: "" ) ) ) ) v.append( "citation.evidenceId must be non-empty" );
+				if ( !len( trim( toString( c.documentName ?: "" ) ) ) ) v.append( "citation.documentName must be non-empty" );
+				if ( !isNull( c.page ?: nullValue() ) && ( !isNumeric( c.page ) || c.page < 1 ) ) {
+					v.append( "citation.page must be an integer >= 1 or null" );
+				}
+			}
+		}
+
+		if ( !isArray( r.conflicts ?: "" ) ) {
+			v.append( "conflicts must be an array" );
+		} else {
+			for ( var c in r.conflicts ) {
+				if ( !isStruct( c ) ) { v.append( "conflict is not a struct" ); continue; }
+				if ( !len( trim( toString( c.description ?: "" ) ) ) ) v.append( "conflict.description must be non-empty" );
+				if ( !isArray( c.evidenceIds ?: "" ) || c.evidenceIds.len() < 2 ) v.append( "conflict.evidenceIds needs at least 2 entries" );
+			}
+		}
+
+		if ( !isNull( r.error ?: nullValue() ) ) {
+			if ( !isStruct( r.error ) ) {
+				v.append( "error must be an object or null" );
+			} else {
+				if ( !variables.ERROR_CODES.findNoCase( r.error.code ?: "" ) ) v.append( "error.code not in enum: #r.error.code ?: ''#" );
+				if ( !len( trim( toString( r.error.message ?: "" ) ) ) ) v.append( "error.message must be non-empty" );
+			}
+		}
+
+		return v;
+	}
+
+	// ---------------------------------------------------------------- private
+
+	/** Keep only citations whose id retrieval actually returned; rebuild metadata from retrieval. */
+	private array function normalizeCitations( required any raw, required struct allowed ){
+		if ( !isArray( arguments.raw ) ) return [];
+
+		var out  = [];
+		var seen = {};
+		for ( var c in arguments.raw ) {
+			var evidenceId = "";
+			if ( isStruct( c ) )          evidenceId = trim( toString( c.evidenceId ?: "" ) );
+			else if ( isSimpleValue( c ) ) evidenceId = trim( toString( c ) );
+
+			// Reject anything retrieval did not return, and de-duplicate.
+			if ( !len( evidenceId ) || !arguments.allowed.keyExists( evidenceId ) ) continue;
+			if ( seen.keyExists( evidenceId ) ) continue;
+			seen[ evidenceId ] = true;
+
+			var meta = arguments.allowed[ evidenceId ].metadata ?: {};
+			out.append( {
+				"evidenceId"   : evidenceId,
+				"documentName" : meta.documentName ?: "",
+				"page"         : meta.page ?: nullValue(),
+				"section"      : meta.section ?: nullValue()
+			} );
+		}
+		return out;
+	}
+
+	private array function normalizeConflicts( required any raw, required struct allowed ){
+		if ( !isArray( arguments.raw ) ) return [];
+
+		var out = [];
+		for ( var c in arguments.raw ) {
+			if ( !isStruct( c ) ) continue;
+			var description = trim( toString( c.description ?: "" ) );
+			if ( !len( description ) ) continue;
+
+			var ids  = [];
+			var seen = {};
+			for ( var id in ( isArray( c.evidenceIds ?: "" ) ? c.evidenceIds : [] ) ) {
+				var evidenceId = trim( toString( id ?: "" ) );
+				if ( !len( evidenceId ) || !arguments.allowed.keyExists( evidenceId ) ) continue;
+				if ( seen.keyExists( evidenceId ) ) continue;
+				seen[ evidenceId ] = true;
+				ids.append( evidenceId );
+			}
+			// A conflict that cannot name both sides is not a usable conflict.
+			if ( ids.len() < 2 ) continue;
+			out.append( { "description": description, "evidenceIds": ids } );
+		}
+		return out;
+	}
+
+	/** R7: "high" requires at least one strong, directly relevant chunk. */
+	private string function capConfidence( required string confidence, required array citations, required struct allowed ){
+		if ( arguments.confidence != "high" ) return arguments.confidence;
+
+		var scored = false;
+		var strong = false;
+		for ( var c in arguments.citations ) {
+			var score = arguments.allowed[ c.evidenceId ].score ?: 0;
+			if ( isNumeric( score ) && score > 0 ) {
+				scored = true;
+				if ( score >= variables.HIGH_CONFIDENCE_MIN_SCORE ) strong = true;
+			}
+		}
+		// If retrieval supplies no scores at all we cannot judge strength, so leave it alone.
+		return ( scored && !strong ) ? "medium" : "high";
+	}
+
+	private string function pick( required any value, required array allowed, required string fallback ){
+		var v = trim( toString( arguments.value ?: "" ) );
+		return arguments.allowed.findNoCase( v ) ? lCase( v ) : arguments.fallback;
+	}
+
+	private function optionalString( required any value ){
+		var v = trim( toString( arguments.value ?: "" ) );
+		return len( v ) ? v : nullValue();
+	}
+
+}

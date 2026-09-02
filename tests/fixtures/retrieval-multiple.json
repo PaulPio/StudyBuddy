@@ -1,0 +1,27 @@
+{
+  "query": "How does normalization affect query performance?",
+  "chunks": [
+    {
+      "evidenceId": "ev-lecture05-p12-c03",
+      "text": "Third normal form reduces data redundancy and prevents update anomalies.",
+      "score": 0.88,
+      "metadata": {
+        "documentId": "doc-lecture05",
+        "documentName": "Lecture_05.pdf",
+        "page": 12,
+        "section": "Third Normal Form"
+      }
+    },
+    {
+      "evidenceId": "ev-notes-c07",
+      "text": "Highly normalized schemas require more joins, which can slow down read-heavy reporting queries.",
+      "score": 0.74,
+      "metadata": {
+        "documentId": "doc-notes",
+        "documentName": "Course_Notes.md",
+        "page": null,
+        "section": null
+      }
+    }
+  ]
+}

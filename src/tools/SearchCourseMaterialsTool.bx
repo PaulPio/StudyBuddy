@@ -1,0 +1,111 @@
+/**
+ * search_course_materials - retrieval adapter (Paul).
+ *
+ * Owns the team contract in contracts.md section 2/3. Sushant's real retrieval is injected
+ * as a callable, so nothing in the agent changes when the fake is swapped for the real one:
+ *
+ *     searcher = ( courseId, query, limit, filters ) => { query: "...", chunks: [ ... ] }
+ */
+class {
+
+	variables.DEFAULT_LIMIT = 6;
+
+	/**
+	 * @searcher Callable ( courseId, query, limit, filters ) returning { query, chunks }.
+	 */
+	function init( required any searcher ){
+		variables.searcher = arguments.searcher;
+		return this;
+	}
+
+	/**
+	 * Call retrieval and return only well-formed chunks.
+	 * Throws on any retrieval failure; the agent maps that to RETRIEVAL_UNAVAILABLE.
+	 */
+	struct function search(
+		required string courseId,
+		required string query,
+		numeric limit = variables.DEFAULT_LIMIT,
+		struct filters = {}
+	){
+		var raw = variables.searcher(
+			arguments.courseId,
+			arguments.query,
+			arguments.limit,
+			arguments.filters
+		);
+
+		if ( isNull( raw ) || !isStruct( raw ) ) {
+			throw( type: "StudyBuddy.RetrievalContract", message: "Retrieval did not return a struct." );
+		}
+
+		var rawChunks = raw.chunks ?: [];
+		if ( !isArray( rawChunks ) ) {
+			throw( type: "StudyBuddy.RetrievalContract", message: "Retrieval 'chunks' is not an array." );
+		}
+
+		// Drop malformed chunks rather than trusting them: a chunk with no stable evidenceId
+		// or no documentName can never be cited safely.
+		var clean = [];
+		var seen  = {};
+		for ( var chunk in rawChunks ) {
+			if ( !isStruct( chunk ) ) continue;
+
+			var evidenceId = trim( toString( chunk.evidenceId ?: "" ) );
+			var text       = toString( chunk.text ?: "" );
+			var meta       = isStruct( chunk.metadata ?: "" ) ? chunk.metadata : {};
+			var docName    = trim( toString( meta.documentName ?: "" ) );
+
+			if ( !len( evidenceId ) || !len( trim( text ) ) || !len( docName ) ) continue;
+			if ( seen.keyExists( evidenceId ) ) continue; // evidenceId must be unique per request
+			seen[ evidenceId ] = true;
+
+			clean.append( {
+				"evidenceId" : evidenceId,
+				"text"       : text,
+				"score"      : isNumeric( chunk.score ?: "" ) ? chunk.score : 0,
+				"metadata"   : {
+					"documentId"   : toString( meta.documentId ?: "" ),
+					"documentName" : docName,
+					"page"         : normalizePage( meta.page ?: "" ),
+					"section"      : len( trim( toString( meta.section ?: "" ) ) ) ? trim( toString( meta.section ) ) : nullValue()
+				}
+			} );
+
+			if ( clean.len() >= arguments.limit ) break;
+		}
+
+		return { "query": toString( raw.query ?: arguments.query ), "chunks": clean };
+	}
+
+	/**
+	 * The same adapter exposed as a bx-ai tool. Registered on the agent so the contract holds
+	 * and a tool-calling provider can drive it directly; the P0 path calls search() itself so
+	 * citation validation always runs against a known chunk set.
+	 */
+	function toAiTool(){
+		var self = this;
+		return aiTool(
+			"search_course_materials",
+			"Search the student's uploaded course materials and return evidence chunks with stable evidence IDs.",
+			( courseId, query, limit, filters ) => self.search(
+				courseId : arguments.courseId,
+				query    : arguments.query,
+				limit    : isNumeric( arguments.limit ?: "" ) ? arguments.limit : 6,
+				filters  : isStruct( arguments.filters ?: "" ) ? arguments.filters : {}
+			)
+		)
+			.describeArg( "courseId", "Course identifier" )
+			.describeArg( "query", "The student's question" )
+			.describeArg( "limit", "Maximum number of evidence chunks to return" )
+			.describeArg( "filters", "Optional document filters" );
+	}
+
+	/** Page is an integer >= 1 or null. Never guessed. */
+	private function normalizePage( any page ){
+		if ( isNull( arguments.page ) || !isNumeric( arguments.page ) ) return nullValue();
+		var n = int( arguments.page );
+		return n >= 1 ? n : nullValue();
+	}
+
+}

@@ -1,0 +1,27 @@
+{
+  "query": "How many normal forms does the course cover?",
+  "chunks": [
+    {
+      "evidenceId": "ev-lecture05-p03-c01",
+      "text": "In this course we will cover three normal forms: 1NF, 2NF and 3NF.",
+      "score": 0.86,
+      "metadata": {
+        "documentId": "doc-lecture05",
+        "documentName": "Lecture_05.pdf",
+        "page": 3,
+        "section": "Overview"
+      }
+    },
+    {
+      "evidenceId": "ev-syllabus-p02-c01",
+      "text": "Normalization coverage in this course includes 1NF through BCNF, for a total of four normal forms.",
+      "score": 0.84,
+      "metadata": {
+        "documentId": "doc-syllabus",
+        "documentName": "Syllabus.pdf",
+        "page": 2,
+        "section": "Topics"
+      }
+    }
+  ]
+}
